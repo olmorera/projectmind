@@ -1,14 +1,17 @@
-# run_agent_test.py
-from projectmind.agents.base_agent import AgentDefinition, BaseAgent
-from projectmind.utils.logger import logger
+import asyncio
+from projectmind.workflows.agent_flow import agent_flow
 
-agent_conf = AgentDefinition(
-    name="Planner",
-    role="Plans project structure",
-    goal="Generate project plan from user input",
-    type="planner"
-)
+async def main():
+    flow = agent_flow()
 
-agent = BaseAgent(agent_conf)
-response = agent.run("Create a simple blog app")
-print(response)
+    result = await flow.ainvoke({
+        "agent_name": "planner",
+        "input": "Build an app to manage book rentals",
+        "slack_user": "U08RMCF50DU"
+    })
+
+    print("\n📦 Final result:")
+    print(result)
+
+if __name__ == "__main__":
+    asyncio.run(main())
