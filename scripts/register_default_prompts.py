@@ -4,6 +4,7 @@ import asyncio
 import uuid
 import os
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy import update
 from dotenv import load_dotenv
 
 from projectmind.db.models.prompt import Prompt
@@ -54,17 +55,30 @@ PROMPTS = [
 async def main():
     async with Session() as session:
         for config in PROMPTS:
+            # 🔁 Desactivar anteriores activos
+            await session.execute(
+                update(Prompt)
+                .where(
+                    Prompt.agent_name == config["agent_name"],
+                    Prompt.task_type == config["task_type"],
+                    Prompt.is_active == True
+                )
+                .values(is_active=False)
+            )
+
+            # ✅ Insertar el nuevo como único activo
             prompt = Prompt(
                 id=uuid.uuid4(),
                 agent_name=config["agent_name"],
                 task_type=config["task_type"],
                 version=config["version"],
-                prompt=config["prompt"]
+                prompt=config["prompt"],
+                is_active=True
             )
             session.add(prompt)
 
         await session.commit()
-        print("✅ Default prompts registered successfully.")
+        print("✅ Default prompts registered successfully and older ones deactivated.")
 
 if __name__ == "__main__":
     asyncio.run(main())
