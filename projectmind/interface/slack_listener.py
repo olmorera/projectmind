@@ -6,7 +6,6 @@ from slack_bolt.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
 from loguru import logger
 
-from langgraph.graph import StateGraph
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
@@ -15,25 +14,17 @@ from projectmind.db.models.agent import Agent
 
 load_dotenv()
 
-# Slack App
 app = AsyncApp(token=os.getenv("SLACK_BOT_TOKEN"))
 
-# DB
-engine = create_async_engine(os.getenv("POSTGRES_URL"), echo=False)
+engine = create_async_engine(os.getenv("ASYNC_DATABASE_URL"), echo=False)
 AsyncSession = async_sessionmaker(engine, expire_on_commit=False)
 
-# --- Parseador inteligente ---
 def parse_message(text: str) -> tuple[str, str]:
-    """
-    Extract agent and input from a Slack message.
-    Format: agent: planner | input: build a blog
-    """
     match = re.match(r"agent:\s*(\w+)\s*\|\s*input:\s*(.+)", text, re.IGNORECASE)
     if match:
         return match.group(1).strip(), match.group(2).strip()
-    return "planner", text.strip()  # fallback default
+    return "planner", text.strip()
 
-# --- Comando: agents / help ---
 @app.message(re.compile("^(agents|help)$", re.IGNORECASE))
 async def list_agents(event, say):
     async with AsyncSession() as session:
@@ -48,27 +39,26 @@ async def list_agents(event, say):
         message = "*🤖 Available Agents:*\n"
         for agent in agents:
             message += f"- `{agent.name}` ({agent.type}) → {agent.goal}\n"
-
         message += "\n_Use `agent: <name> | input: <your prompt>` to activate._"
+
         await say(message)
 
-# --- Comando: entrada general de texto ---
 @app.message("")
 async def handle_message(event, say):
     user_input = event.get("text", "").strip()
     user = event["user"]
-    logger.info(f"📩 Received message from {user}: {user_input}")
+    logger.info(f"📩 Message from {user}: {user_input}")
 
     if not user_input:
         await say("⚠️ I didn't receive any input.")
         return
 
     try:
-        # Extraer agente e input
         agent_name, input_text = parse_message(user_input)
 
-        # Ejecutar flujo dinámico
         flow = agent_flow()
+
+        # ✅ Aquí se corrigió con `await`
         result = await flow.ainvoke({
             "agent_name": agent_name,
             "input": input_text,
@@ -84,16 +74,15 @@ async def handle_message(event, say):
         message += f"*📥 Input:* `{input_text}`\n"
         message += f"*📤 Output:*\n```{output}```\n"
         if task_count:
-            message += f"*📝 {task_count} tasks generated and stored in DB.*\n"
+            message += f"*📝 {task_count} tasks stored in DB.*\n"
         message += f"*🆔 Run ID:* `{run_id}`"
 
         await say(message)
 
     except Exception as e:
-        logger.exception("❌ Error during agent execution")
+        logger.exception("❌ Agent error")
         await say(f"❌ Error: {str(e)}")
 
-# --- Lanzador principal ---
 async def main():
     handler = AsyncSocketModeHandler(app, os.getenv("SLACK_APP_TOKEN"))
     await handler.start_async()
