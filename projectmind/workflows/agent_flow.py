@@ -17,15 +17,24 @@ from projectmind.agents.agent_factory import AgentFactory
 from projectmind.db.models import AgentRun, Prompt
 from projectmind.memory.memory_manager import MemoryManager
 
+# 🔁 Cargar variables de entorno
 load_dotenv()
 
+DATABASE_URL = os.getenv("DATABASE_URL")
 ASYNC_DATABASE_URL = os.getenv("ASYNC_DATABASE_URL")
-SYNC_DATABASE_URL = os.getenv("SYNC_DATABASE_URL")
 
+if not DATABASE_URL:
+    raise RuntimeError("❌ DATABASE_URL is not set in .env")
+
+if not ASYNC_DATABASE_URL:
+    raise RuntimeError("❌ ASYNC_DATABASE_URL is not set in .env")
+
+# ⚙️ Conexión async para ORM (LangGraph)
 engine = create_async_engine(ASYNC_DATABASE_URL, echo=False)
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
-with PostgresSaver.from_conn_string(SYNC_DATABASE_URL) as saver:
+# ✅ Checkpoint automático para LangGraph
+with PostgresSaver.from_conn_string(DATABASE_URL) as saver:
     saver.setup()
     checkpointer = saver
 
@@ -42,11 +51,11 @@ async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
     logger.debug(f"📥 Input: {input_text}")
 
     async with AsyncSessionLocal() as session:
-        agent = await AgentFactory.create(agent_name, session)
+        agent = AgentFactory.create(agent_name)
 
         result = await session.execute(
             select(Prompt)
-            .where(Prompt.agent_name == agent_name, Prompt.task_type == "generate", Prompt.is_active == True)
+            .where(Prompt.agent_name == agent_name, Prompt.task_type == "code_generation", Prompt.is_active == True)
             .order_by(Prompt.version.desc())
             .limit(1)
         )
@@ -57,8 +66,8 @@ async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
         memory = MemoryManager(namespace="task_outputs")
         memory_key = f"{agent_name}:last"
         context = await memory.get([memory_key], session)
-        full_prompt = f"{context}\n\n{prompt_obj.prompt}\n\n{input_text}" if context else f"{prompt_obj.prompt}\n\n{input_text}"
 
+        full_prompt = f"{context}\n\n{prompt_obj.prompt}\n\n{input_text}" if context else f"{prompt_obj.prompt}\n\n{input_text}"
         output = agent.run(full_prompt)
 
         await memory.set(memory_key, output, session)
@@ -69,7 +78,8 @@ async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
             user_id=user_id,
             input=input_text,
             output=output,
-            extra={"context_used": bool(context)}
+            extra={"context_used": bool(context)},
+            llm_config_id=agent.llm.config.id
         )
         session.add(run)
         await session.commit()
@@ -86,9 +96,7 @@ async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
 def agent_flow():
     workflow = StateGraph(dict)
 
-    # ✅ NO USAR ensure_future: LangGraph maneja coroutines directamente
     workflow.add_node("agent", RunnableLambda(agent_node))
-
     workflow.set_entry_point("agent")
     workflow.set_finish_point("agent")
     graph = workflow.compile()

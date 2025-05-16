@@ -1,6 +1,6 @@
 # projectmind/db/models/agent_run.py
 
-from sqlalchemy import Column, String, DateTime, Text, JSON, Index
+from sqlalchemy import Column, String, DateTime, Text, JSON, Index, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 import uuid
@@ -15,6 +15,7 @@ class AgentRun(Base):
     input = Column(Text, nullable=False)
     output = Column(Text, nullable=False)
     extra = Column(JSON, nullable=True)
+    llm_config_id = Column(UUID(as_uuid=True), ForeignKey("llm_configs.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
     __table_args__ = (

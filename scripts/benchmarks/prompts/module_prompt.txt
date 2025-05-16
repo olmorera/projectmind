@@ -1,0 +1,17 @@
+Generate a complete Python module named `file_processor.py` with the following:
+
+- A class `FileProcessor` with:
+  - `__init__(self, input_path: str)`
+  - `read_file(self) -> str`
+  - `count_words(self) -> int`
+  - `save_summary(self, output_path: str) -> None`
+
+- Include error handling and docstrings.
+
+- Add a `main()` function that:
+  - Receives a file path from `sys.argv`
+  - Creates a `FileProcessor`
+  - Executes all steps
+  - Saves the summary
+
+Only return the complete Python code. Do not explain anything.

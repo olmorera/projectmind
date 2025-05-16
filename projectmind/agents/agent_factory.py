@@ -1,39 +1,43 @@
 # projectmind/agents/agent_factory.py
 
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy.orm import Session
+from projectmind.db.session import engine
 from projectmind.db.models.agent import Agent as AgentModel
+from projectmind.db.models.llm_config import LLMConfig
+from projectmind.db.models.llm_model import LLMModel
+from projectmind.llm.llama_provider import LlamaProvider
 from projectmind.agents.base_agent import BaseAgent, AgentDefinition
 from loguru import logger
 
 class AgentFactory:
     @staticmethod
-    async def create(name: str, session: AsyncSession) -> BaseAgent:
-        """
-        Dynamically loads an agent definition from the database
-        and returns a configured BaseAgent instance.
-        """
-        stmt = select(AgentModel).where(AgentModel.name == name, AgentModel.is_active == True)
-        result = await session.execute(stmt)
-        row = result.scalar_one_or_none()
+    def create(agent_name: str) -> BaseAgent:
+        with Session(engine) as session:
+            logger.info(f"🧠 Loading agent '{agent_name}' dynamically from database")
 
-        if not row:
-            raise ValueError(f"No active agent found with name '{name}'")
+            # 1. Obtener el agente
+            agent_row = session.query(AgentModel).filter_by(name=agent_name, is_active=True).first()
+            if not agent_row:
+                raise ValueError(f"Agent '{agent_name}' not found in database")
 
-        logger.info(f"🧠 Loading agent '{name}' dynamically from database")
+            # 2. Obtener configuración LLM
+            config = session.query(LLMConfig).filter_by(id=agent_row.llm_config_id).first()
+            if not config:
+                raise ValueError(f"LLMConfig not found for agent '{agent_name}'")
 
-        agent_def = AgentDefinition(
-            name=row.name,
-            role=row.type,
-            goal=row.goal,
-            type=row.type
-        )
+            model = session.query(LLMModel).filter_by(id=config.llm_model_id).first()
+            if not model:
+                raise ValueError(f"LLMModel not found for agent '{agent_name}'")
 
-        agent = BaseAgent(agent_def)
+            # 3. Instanciar LlamaProvider
+            llm = LlamaProvider(config=config, model=model)
 
-        # Runtime config (model, temp, memory)
-        agent.config.model = row.model
-        agent.config.temperature = row.temperature
-        agent.config.use_memory = row.use_memory
+            # 4. Crear definición del agente
+            definition = AgentDefinition(
+                name=agent_row.name,
+                role=agent_row.type,
+                goal=agent_row.goal,
+                type=agent_row.type,
+            )
 
-        return agent
+            return BaseAgent(definition=definition, llm=llm)

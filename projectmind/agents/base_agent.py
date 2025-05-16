@@ -3,21 +3,29 @@
 from pydantic import BaseModel, Field
 from loguru import logger
 from typing import Optional, Literal
+from projectmind.llm.llama_provider import LlamaProvider
 
 class AgentDefinition(BaseModel):
     name: str
     role: str
     goal: str
     type: Literal["planner", "frontend_generator", "backend_generator", "validator"]
-    prompt: Optional[str] = None  # ✅ Ya no se requiere al crear
-    metadata: dict = Field(default_factory=dict)  # ✅ evita usar {}
+    prompt: Optional[str] = None
+    metadata: dict = Field(default_factory=dict)
 
 class BaseAgent:
-    def __init__(self, definition: AgentDefinition):
+    def __init__(self, definition: AgentDefinition, llm: LlamaProvider):
         self.definition = definition
-        self.config = type("Config", (), {})()  # Objeto dinámico
+        self.llm = llm  # LlamaProvider instance
+        self.config = type("Config", (), {})()
         logger.info(f"✅ Initialized agent '{definition.name}' of type '{definition.type}'")
 
     def run(self, prompt: str) -> str:
         logger.debug(f"🧠 Agent '{self.definition.name}' received prompt:\n{prompt}")
-        return f"🛠 Agent '{self.definition.name}' executed. (Response generation not implemented yet.)"
+        try:
+            response = self.llm.generate(prompt)
+            logger.debug(f"✅ Agent '{self.definition.name}' LLM output:\n{response}")
+            return response
+        except Exception as e:
+            logger.error(f"❌ Error while generating response: {e}")
+            return f"⚠️ Failed to generate response: {str(e)}"

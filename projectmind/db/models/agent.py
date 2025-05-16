@@ -1,6 +1,6 @@
 # projectmind/db/models/agent.py
 
-from sqlalchemy import Column, String, Boolean, Float, Text
+from sqlalchemy import Column, String, Boolean, Float, Text, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from sqlalchemy.types import DateTime
@@ -14,8 +14,7 @@ class Agent(Base):
     name = Column(String, unique=True, nullable=False, index=True)
     type = Column(String, nullable=False, index=True)       # planner, generator, etc.
     goal = Column(Text, nullable=False)
-    model = Column(String, nullable=True)
-    temperature = Column(Float, default=0.2)
+    llm_config_id = Column(UUID(as_uuid=True), ForeignKey("llm_configs.id"), nullable=True)
     use_memory = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
