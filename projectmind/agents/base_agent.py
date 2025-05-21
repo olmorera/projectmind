@@ -9,7 +9,7 @@ class AgentDefinition(BaseModel):
     name: str
     role: str
     goal: str
-    type: Literal["planner", "frontend_generator", "backend_generator", "validator"]
+    type: str
     prompt: Optional[str] = None
     metadata: dict = Field(default_factory=dict)
 

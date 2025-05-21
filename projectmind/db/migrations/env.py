@@ -15,10 +15,10 @@ config = context.config
 if config.config_file_name:
     fileConfig(config.config_file_name)
 
-# Validate DB URL
-url = os.getenv("POSTGRES_URL")
+# ✅ Actualizado: intenta con DATABASE_URL y luego POSTGRES_URL
+url = os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")
 if not url:
-    raise ValueError("❌ Environment variable POSTGRES_URL is not set.")
+    raise ValueError("❌ Environment variable DATABASE_URL or POSTGRES_URL is not set.")
 config.set_main_option("sqlalchemy.url", url)
 
 target_metadata = Base.metadata

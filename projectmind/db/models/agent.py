@@ -18,3 +18,5 @@ class Agent(Base):
     use_memory = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    optimize_prompt = Column(Boolean, default=True)
+

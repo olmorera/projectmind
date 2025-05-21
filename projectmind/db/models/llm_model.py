@@ -31,5 +31,4 @@ class LLMModel(Base):
     embedding = Column(Boolean, default=False)
     logits_all = Column(Boolean, default=False)
     verbose = Column(Boolean, default=False)
-
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
