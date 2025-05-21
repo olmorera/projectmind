@@ -1,28 +1,34 @@
 # scripts/run_agent.py
-import sys
+
+import argparse
 import asyncio
 from loguru import logger
 from projectmind.workflows.agent_flow import agent_flow
 
+
 async def main():
-    if len(sys.argv) < 3:
-        print("Usage: run_agent.py <agent_name> <input_text>")
-        sys.exit(1)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("agent", help="Agent name (e.g., planner, frontend_generator)")
+    parser.add_argument("input", help="User input for the agent")
+    parser.add_argument("--project_id", help="Project ID to scope memory/context", required=False)
+    parser.add_argument("--user_id", help="Slack user ID (optional)", required=False)
 
-    agent_name = sys.argv[1]
-    input_text = sys.argv[2]
+    args = parser.parse_args()
 
-    logger.info(f"🔁 Running agent: {agent_name}")
-    logger.info(f"📝 Input: {input_text}")
+    logger.info(f"🔁 Running agent: {args.agent}")
+    logger.info(f"📝 Input: {args.input}")
 
     flow = agent_flow()
     result = await flow.ainvoke({
-        "agent_name": agent_name,
-        "input": input_text
+        "agent_name": args.agent,
+        "input": args.input,
+        "project_id": args.project_id,
+        "slack_user": args.user_id
     })
 
-    print("\n✅ Result:")
+    logger.success("✅ Result:")
     print(result)
+
 
 if __name__ == "__main__":
     asyncio.run(main())

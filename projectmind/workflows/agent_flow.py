@@ -16,6 +16,7 @@ from projectmind.agents.agent_factory import AgentFactory
 from projectmind.db.models import AgentRun, Prompt, Agent
 from projectmind.memory.memory_manager import MemoryManager
 from projectmind.prompts.prompt_manager import PromptManager
+from projectmind.utils.language_utils import translate_to_english
 from projectmind.workflows.slack_notifier import notify_slack
 
 # 🔁 Load environment variables
@@ -33,17 +34,32 @@ with PostgresSaver.from_conn_string(DATABASE_URL) as saver:
 
 async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
     agent_name = state.get("agent_name")
-    input_text = state.get("input")
-    user_id = state.get("slack_user", None)
+    user_input = state.get("input")
+    project_id = state.get("project_id")
+    slack_user = state.get("slack_user", None)
 
-    if not agent_name or input_text is None:
+    if not agent_name or user_input is None:
         raise ValueError("Missing 'agent_name' and/or 'input' in state")
 
     logger.info(f"🤖 Executing agent: {agent_name}")
-    logger.debug(f"📅 Input: {input_text}")
+    logger.debug(f"📥 Input: {user_input}")
 
     async with AsyncSessionLocal() as session:
         agent = AgentFactory.create(agent_name)
+
+        # Detect and translate input if needed
+        translated_input, was_translated = translate_to_english(user_input)
+
+        if was_translated:
+            logger.info("🌍 Input was not in English — translated before execution")
+            await notify_slack({
+                "agent": agent_name,
+                "note": "User input was auto-translated to English before execution.",
+                "original_input": user_input,
+                "translated_input": translated_input
+            })
+        else:
+            translated_input = user_input
 
         result = await session.execute(
             select(Prompt)
@@ -61,38 +77,70 @@ async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
         agent_row = agent_config.scalar_one()
 
         memory = MemoryManager(namespace="task_outputs")
-        memory_key = f"{agent_name}:last"
-        context = await memory.get([memory_key], session)
+        context = ""
 
-        use_context = len(input_text.strip()) > 10
-        full_prompt = f"{context}\n\n{prompt_obj.prompt}\n\n{input_text}" if use_context and context else f"{prompt_obj.prompt}\n\n{input_text}"
+        if project_id and agent.definition.type:
+            context_items = await memory.get_project_context(
+                project_id=project_id,
+                agent_name=agent_name,
+                task_type=agent.definition.type,
+                session=session
+            )
+            context = "\n\n".join(context_items) if context_items else ""
+            logger.debug(f"📚 Retrieved {len(context_items)} context items from memory for project {project_id}")
+        else:
+            logger.debug("📭 No project_id or agent type — skipping contextual memory.")
+
+        use_context = len(context.strip()) > 10
+        full_prompt = f"{context}\n\n{prompt_obj.prompt}\n\n{translated_input}" if use_context else f"{prompt_obj.prompt}\n\n{translated_input}"
 
         output = agent.run(full_prompt)
-        await memory.set(memory_key, output, session)
+
+        if project_id and agent.definition.type:
+            try:
+                await memory.save_project_context(
+                    project_id=project_id,
+                    agent_name=agent_name,
+                    task_type=agent.definition.type,
+                    content=output,
+                    session=session
+                )
+                logger.success(f"🧠 Project memory stored for {agent_name}:{agent.definition.type} in project {project_id}")
+            except Exception as e:
+                logger.error(f"❌ Error saving project memory: {e}")
+        else:
+            if not project_id:
+                logger.debug("ℹ️ No project_id provided — skipping memory storage.")
+            if not agent.definition.type:
+                logger.warning(f"⚠️ Agent '{agent_name}' has no type defined — skipping memory storage.")
 
         run = AgentRun(
             id=uuid.uuid4(),
             agent_name=agent_name,
-            user_id=user_id,
-            input=input_text,
+            user_id=slack_user,
+            input=user_input,
             output=output,
-            extra={"context_used": bool(context)},
+            extra={
+                "context_used": bool(use_context),
+                "project_id": project_id,
+                "was_translated": was_translated,
+                "translated_input": translated_input if was_translated else None
+            },
             llm_config_id=agent.llm.config.id
         )
         session.add(run)
         await session.commit()
         logger.success(f"✅ Agent run saved: {run.id}")
 
-        # 🚨 Verificar si se debe optimizar
-        output_lines = output.strip().splitlines()
-        output_unique = len(set(output_lines))
-        should_optimize = (
-            not output or
-            len(output.strip()) < 50 or
-            output_unique < (len(output_lines) * 0.5)
-        )
-
         if agent_row.optimize_prompt:
+            output_lines = output.strip().splitlines()
+            output_unique = len(set(output_lines))
+            should_optimize = (
+                not output or
+                len(output.strip()) < 50 or
+                output_unique < (len(output_lines) * 0.5)
+            )
+
             if should_optimize:
                 logger.warning(f"⚠️ Output from agent '{agent_name}' is weak — triggering prompt_optimizer")
                 feedback = "Output was empty, too short, or repetitive"
@@ -138,62 +186,11 @@ async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
         }
 
 
-async def prompt_optimizer_node(state: Dict[str, Any]) -> Dict[str, Any]:
-    input_data = state.get("input", {})
-    user_id = state.get("slack_user", None)
-
-    prompt_id = input_data.get("prompt_id")
-    success = input_data.get("success", True)
-    feedback = input_data.get("feedback", "")
-    model_used = input_data.get("model_used", "unknown")
-
-    if not prompt_id:
-        raise ValueError("Missing 'prompt_id' in input")
-
-    async with AsyncSessionLocal() as session:
-        manager = PromptManager(session)
-        old_prompt = await manager.get_prompt_by_id(prompt_id)
-
-        if success:
-            logger.info(f"✅ Prompt {prompt_id} marked as successful — no optimization needed.")
-            return {**state, "output": "Prompt was successful. No optimization performed."}
-
-        agent = AgentFactory.create("prompt_optimizer")
-        optimization_prompt = (
-            f"You are an expert in prompt optimization.\n\n"
-            f"Original prompt:\n{old_prompt.prompt}\n\n"
-            f"Feedback:\n{feedback}\n\n"
-            f"Model used: {model_used}\n\n"
-            f"Please rewrite the prompt to improve clarity, usefulness, and effectiveness."
-        )
-        improved = agent.run(optimization_prompt)
-
-        new_prompt = await manager.register_prompt_version(old_prompt, improved)
-
-        run = AgentRun(
-            id=uuid.uuid4(),
-            agent_name="prompt_optimizer",
-            user_id=user_id,
-            input=input_data,
-            output=improved,
-            extra={"optimized_from": str(old_prompt.id), "model_used": model_used},
-            llm_config_id=agent.llm.config.id
-        )
-        session.add(run)
-        await session.commit()
-
-        logger.success(f"✅ Optimized prompt registered as v{new_prompt.version} for {old_prompt.agent_name}")
-        return {**state, "output": improved, "run_id": str(run.id)}
-
-
 def agent_flow():
     workflow = StateGraph(dict)
     workflow.add_node("agent", RunnableLambda(agent_node))
-    workflow.add_node("optimizer", RunnableLambda(prompt_optimizer_node))
 
     def router(state: Dict[str, Any]):
-        if state.get("agent_name") == "prompt_optimizer":
-            return "optimizer"
         return "agent"
 
     workflow.set_conditional_entry_point(router)

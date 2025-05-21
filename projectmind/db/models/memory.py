@@ -13,12 +13,15 @@ class Memory(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     namespace = Column(String, nullable=False)
-    key = Column(String, nullable=False)
+    key = Column(String, nullable=True)
     value = Column(Text, nullable=False)
+    project_id = Column(String, nullable=True)
+    agent_name = Column(String, nullable=True)
+    task_type = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    # Índices para búsquedas eficientes
     __table_args__ = (
         Index("ix_memory_namespace_key", "namespace", "key"),
         Index("ix_memory_created_at", "created_at"),
+        Index("ix_memory_project_agent_task", "project_id", "agent_name", "task_type"),
     )
