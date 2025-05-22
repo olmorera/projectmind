@@ -6,7 +6,7 @@ from loguru import logger
 from projectmind.agents.agent_factory import AgentFactory
 from projectmind.db.models import AgentRun, Prompt, Agent
 from projectmind.utils.language_utils import translate_to_english
-from projectmind.workflows.slack_notifier import notify_slack
+from projectmind.utils.slack_notifier import notify_slack
 from projectmind.db.crud.project import get_project_by_name, create_project
 
 from projectmind.db.session_async import AsyncSessionLocal

@@ -1,7 +1,7 @@
 from loguru import logger
 from projectmind.agents.agent_factory import AgentFactory
 from projectmind.prompts.prompt_manager import PromptManager
-from projectmind.workflows.slack_notifier import notify_slack
+from projectmind.utils.slack_notifier import notify_slack
 
 
 async def maybe_optimize_prompt(session, agent_row, agent, prompt_obj, output):
