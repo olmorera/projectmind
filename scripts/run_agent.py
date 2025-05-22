@@ -3,7 +3,7 @@
 import argparse
 import asyncio
 from loguru import logger
-from projectmind.workflows.agent_flow import agent_flow
+from projectmind.workflows.flow_builder import agent_flow  # <- actualizamos esto
 
 
 async def main():

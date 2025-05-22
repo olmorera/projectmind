@@ -1,5 +1,3 @@
-# projectmind/db/session_async.py
-
 import os
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
