@@ -2,6 +2,7 @@
 
 import os
 import uuid
+import re
 from typing import Dict, Any
 
 from dotenv import load_dotenv
@@ -18,6 +19,8 @@ from projectmind.memory.memory_manager import MemoryManager
 from projectmind.prompts.prompt_manager import PromptManager
 from projectmind.utils.language_utils import translate_to_english
 from projectmind.workflows.slack_notifier import notify_slack
+from projectmind.tasks.task_manager import save_tasks_from_output
+from projectmind.db.crud.project import get_project_by_name, create_project  # Import CRUD proyectos
 
 # 🔁 Load environment variables
 load_dotenv()
@@ -35,7 +38,7 @@ with PostgresSaver.from_conn_string(DATABASE_URL) as saver:
 async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
     agent_name = state.get("agent_name")
     user_input = state.get("input")
-    project_id = state.get("project_id")
+    project_name = state.get("project_name")  # Aquí el cambio
     slack_user = state.get("slack_user", None)
 
     if not agent_name or user_input is None:
@@ -45,6 +48,15 @@ async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
     logger.debug(f"📥 Input: {user_input}")
 
     async with AsyncSessionLocal() as session:
+        # Buscar o crear proyecto por nombre
+        project = None
+        if project_name:
+            project = await get_project_by_name(session, project_name)
+            if not project:
+                # Usamos uuid4 para el id
+                new_project_id = str(uuid.uuid4())
+                project = await create_project(session, new_project_id, name=project_name)
+
         agent = AgentFactory.create(agent_name)
 
         # Detect and translate input if needed
@@ -79,40 +91,49 @@ async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
         memory = MemoryManager(namespace="task_outputs")
         context = ""
 
-        if project_id and agent.definition.type:
+        if project and agent.definition.type and agent_row.use_memory:
             context_items = await memory.get_project_context(
-                project_id=project_id,
+                project_id=project.id,
                 agent_name=agent_name,
                 task_type=agent.definition.type,
                 session=session
             )
             context = "\n\n".join(context_items) if context_items else ""
-            logger.debug(f"📚 Retrieved {len(context_items)} context items from memory for project {project_id}")
+            logger.debug(f"📚 Retrieved {len(context_items)} context items from memory for project {project_name}")
         else:
-            logger.debug("📭 No project_id or agent type — skipping contextual memory.")
+            logger.debug("📭 No project or agent type — skipping contextual memory.")
 
         use_context = len(context.strip()) > 10
         full_prompt = f"{context}\n\n{prompt_obj.prompt}\n\n{translated_input}" if use_context else f"{prompt_obj.prompt}\n\n{translated_input}"
 
         output = agent.run(full_prompt)
 
-        if project_id and agent.definition.type:
+        # Guarda la memoria del proyecto si corresponde
+        if project and agent.definition.type and agent_row.use_memory:
             try:
                 await memory.save_project_context(
-                    project_id=project_id,
+                    project_id=project.id,
                     agent_name=agent_name,
                     task_type=agent.definition.type,
                     content=output,
                     session=session
                 )
-                logger.success(f"🧠 Project memory stored for {agent_name}:{agent.definition.type} in project {project_id}")
+                logger.success(f"🧠 Project memory stored for {agent_name}:{agent.definition.type} in project {project_name}")
             except Exception as e:
                 logger.error(f"❌ Error saving project memory: {e}")
         else:
-            if not project_id:
-                logger.debug("ℹ️ No project_id provided — skipping memory storage.")
+            if not project:
+                logger.debug("ℹ️ No project provided — skipping memory storage.")
             if not agent.definition.type:
                 logger.warning(f"⚠️ Agent '{agent_name}' has no type defined — skipping memory storage.")
+
+        # Guarda las tareas en la base de datos SOLO si el agente tiene permiso
+        if project and agent_row.can_create_tasks:
+            try:
+                await save_tasks_from_output(project.id, agent_name, output, session)
+                logger.success(f"📝 Tasks saved for project {project_name} by agent {agent_name}")
+            except Exception as e:
+                logger.error(f"❌ Error saving tasks: {e}")
 
         run = AgentRun(
             id=uuid.uuid4(),
@@ -122,7 +143,7 @@ async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
             output=output,
             extra={
                 "context_used": bool(use_context),
-                "project_id": project_id,
+                "project_name": project.name if project else None,
                 "was_translated": was_translated,
                 "translated_input": translated_input if was_translated else None
             },

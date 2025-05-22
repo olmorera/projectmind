@@ -1,6 +1,4 @@
-# projectmind/db/models/memory.py
-
-from sqlalchemy import Column, String, DateTime, Text, Index
+from sqlalchemy import Column, String, DateTime, Text, Index, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
@@ -15,7 +13,8 @@ class Memory(Base):
     namespace = Column(String, nullable=False)
     key = Column(String, nullable=True)
     value = Column(Text, nullable=False)
-    project_id = Column(String, nullable=True)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id"), nullable=True)
+    project_name = Column(String, nullable=True)
     agent_name = Column(String, nullable=True)
     task_type = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -24,4 +23,5 @@ class Memory(Base):
         Index("ix_memory_namespace_key", "namespace", "key"),
         Index("ix_memory_created_at", "created_at"),
         Index("ix_memory_project_agent_task", "project_id", "agent_name", "task_type"),
+        Index("ix_memory_project_name_agent_task", "project_name", "agent_name", "task_type"),
     )

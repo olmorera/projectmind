@@ -22,6 +22,7 @@ class LLMModel(Base):
     chat_format = Column(String, nullable=True)             # "llama-2", "chatml", etc.
     n_ctx = Column(Integer, default=4096)                   # Context window size
     numa = Column(Integer, default=1)                       # NUMA-aware execution
+    mixture_of_experts = Column(Boolean, default=False)
     rope_scaling_type = Column(Integer, nullable=True)      # 2 para WizardCoder, etc.
     f16_kv = Column(Boolean, default=False)                 # KV cache en FP16
     use_mlock = Column(Boolean, default=False)              # Evitar swap

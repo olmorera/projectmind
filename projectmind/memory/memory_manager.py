@@ -1,5 +1,3 @@
-# projectmind/memory/memory_manager.py
-
 from loguru import logger
 from sqlalchemy import select, insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,21 +26,30 @@ class MemoryManager:
 
     async def get_project_context(
         self,
-        project_id: str,
-        agent_name: str,
-        task_type: str,
-        session: AsyncSession
+        project_id: str | None = None,
+        project_name: str | None = None,
+        agent_name: str = "",
+        task_type: str = "",
+        session: AsyncSession = None
     ) -> list[str]:
         try:
-            stmt = (
-                select(Memory)
-                .where(Memory.namespace == self.namespace)
-                .where(Memory.project_id == project_id)
-                .where(Memory.agent_name == agent_name)
-                .where(Memory.task_type == task_type)
-                .order_by(Memory.created_at.desc())
-                .limit(10)
-            )
+            stmt = select(Memory).where(Memory.namespace == self.namespace)
+
+            if project_id:
+                stmt = stmt.where(Memory.project_id == project_id)
+            elif project_name:
+                stmt = stmt.where(Memory.project_name == project_name)
+            else:
+                logger.warning("⚠️ No project_id or project_name provided for memory retrieval.")
+                return []
+
+            if agent_name:
+                stmt = stmt.where(Memory.agent_name == agent_name)
+            if task_type:
+                stmt = stmt.where(Memory.task_type == task_type)
+
+            stmt = stmt.order_by(Memory.created_at.desc()).limit(10)
+
             result = await session.execute(stmt)
             rows = result.scalars().all()
             return [r.value for r in rows if r.value]
@@ -52,26 +59,34 @@ class MemoryManager:
 
     async def save_project_context(
         self,
-        project_id: str,
-        agent_name: str,
-        task_type: str,
-        content: str,
-        session: AsyncSession
+        project_id: str | None = None,
+        project_name: str | None = None,
+        agent_name: str = "",
+        task_type: str = "",
+        content: str = "",
+        session: AsyncSession = None
     ):
         if content and len(content.strip()) > 20:
             try:
-                stmt = insert(Memory).values(
+                values = dict(
                     namespace=self.namespace,
-                    project_id=project_id,
                     agent_name=agent_name,
                     task_type=task_type,
                     key=f"{agent_name}:{task_type}:last",
-                    value=content
+                    value=content,
                 )
+                if project_id:
+                    values["project_id"] = project_id
+                if project_name:
+                    values["project_name"] = project_name
+
+                stmt = insert(Memory).values(**values)
                 await session.execute(stmt)
                 await session.commit()
+
+                proj_id_or_name = project_name or project_id or "unknown"
                 logger.success(
-                    f"🧠 Project memory stored for {agent_name}:{task_type} in project {project_id}"
+                    f"🧠 Project memory stored for {agent_name}:{task_type} in project {proj_id_or_name}"
                 )
             except Exception as e:
                 logger.error(f"❌ Memory save_project_context error: {e}")

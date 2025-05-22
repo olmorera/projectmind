@@ -1,14 +1,28 @@
+import os
 from llama_cpp import Llama
 
+os.environ["LLAMA_CPP_LIB"] = "/home/olmorera/AI/llama.cpp/build/bin/libllama.so"
+MODEL_PATH = "/home/olmorera/AI/models/mixtral-8x7b-instruct-v0.1.Q5_K_M.gguf"
+
+print(f"🔍 Using llama.cpp lib from: {os.environ['LLAMA_CPP_LIB']}")
+print(f"📦 Loading model from: {MODEL_PATH}")
+
 llm = Llama(
-    model_path="/home/olmorera/AI/models/wizardcoder-python-34b-v1.0.Q5_K_M.gguf",
-    context_length=4096,
+    model_path=MODEL_PATH,
+    chat_format="mistral-instruct",
+    mixture_of_experts=True,
+    n_ctx=8192,
     n_threads=48,
     n_batch=64,
-    max_tokens=2048,
-    temperature=0.1,
-    top_p=0.95
+    use_mmap=True,
+    use_mlock=False,
+    numa=1,
+    verbose=True
 )
 
-output = llm("Write a Python function to sum a list of integers.", max_tokens=512)
-print(output["choices"][0]["text"])
+response = llm.create_chat_completion(messages=[
+    {"role": "system", "content": "You are a helpful assistant."},
+    {"role": "user", "content": "What is the capital of France?"}
+])
+
+print("🧠 Mixtral response:", response["choices"][0]["message"]["content"])

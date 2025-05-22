@@ -1,12 +1,16 @@
-# projectmind/llm/llama_provider.py
-
 import os
-# 🔁 Usar tu compilación local de llama.cpp
-os.environ["LLAMA_CPP_LIB"] = "/home/olmorera/AI/llama.cpp/build/bin/libllama.so"
 from llama_cpp import Llama
 from projectmind.db.models.llm_model import LLMModel
 from projectmind.db.models.llm_config import LLMConfig
+from projectmind.llm.llama_loader import load_llama_cpp_library
 from loguru import logger
+
+# Load llama.cpp shared library
+load_llama_cpp_library()
+
+
+def _safe_bool(value: bool | None, default: bool = False) -> bool:
+    return default if value is None else value
 
 
 class LlamaProvider:
@@ -15,45 +19,83 @@ class LlamaProvider:
         self.model = model
 
         if model.provider != "llama":
-            raise ValueError(f"Invalid provider: {model.provider}")
+            raise ValueError(f"❌ Invalid provider: {model.provider}")
 
-        if not model.model or not os.path.exists(model.model):
-            raise FileNotFoundError(f"Model file not found: {model.model}")
+        if not model.model or not os.path.isfile(model.model):
+            raise FileNotFoundError(f"❌ Model file not found: {model.model}")
 
-        logger.info(f"🧠 Loading GGUF model: {model.name}")
+        logger.info(f"🧠 Loading GGUF model: {os.path.basename(model.model)}")
+
+        # Config defaults
+        threads = model.n_threads or os.cpu_count()
+        batch = model.n_batch or 64
+        context = model.n_ctx or 4096
+        chat_format = model.chat_format or None
+
+        # Log Llama init params
+        logger.debug("⚙️ llama.cpp initialization parameters:")
+        logger.debug({
+            "model_path": model.model,
+            "chat_format": chat_format,
+            "n_ctx": context,
+            "n_threads": threads,
+            "n_batch": batch,
+            "use_mmap": _safe_bool(model.use_mmap, True),
+            "use_mlock": _safe_bool(model.use_mlock, False),
+            "numa": model.numa or 1,
+            "rope_scaling_type": model.rope_scaling_type or 1,
+            "f16_kv": _safe_bool(model.f16_kv),
+            "low_vram": _safe_bool(model.low_vram),
+            "offload_kqv": _safe_bool(model.offload_kqv),
+            "embedding": _safe_bool(model.embedding),
+            "logits_all": _safe_bool(model.logits_all),
+            "verbose": _safe_bool(model.verbose),
+            "mixture_of_experts": _safe_bool(getattr(model, "mixture_of_experts", False)),
+        })
 
         self.llm = Llama(
             model_path=model.model,
-            chat_format=model.chat_format or "llama-2",
-            n_ctx=model.n_ctx or 4096,
-            n_threads=model.n_threads or os.cpu_count(),
-            n_threads_batch=model.n_threads or os.cpu_count(),
-            n_batch=model.n_batch or 64,
-            n_ubatch=model.n_batch or 64,
-            use_mmap=model.use_mmap if model.use_mmap is not None else True,
-            use_mlock=model.use_mlock if model.use_mlock is not None else False,
+            chat_format=chat_format,
+            n_ctx=context,
+            n_threads=threads,
+            n_threads_batch=threads,
+            n_batch=batch,
+            n_ubatch=batch,
+            use_mmap=_safe_bool(model.use_mmap, True),
+            use_mlock=_safe_bool(model.use_mlock, False),
             numa=model.numa or 1,
             rope_scaling_type=model.rope_scaling_type or 1,
-            f16_kv=model.f16_kv or False,
-            low_vram=model.low_vram or False,
-            offload_kqv=model.offload_kqv or False,
-            embedding=model.embedding or False,
-            logits_all=model.logits_all or False,
-            verbose=model.verbose or False
+            f16_kv=_safe_bool(model.f16_kv),
+            low_vram=_safe_bool(model.low_vram),
+            offload_kqv=_safe_bool(model.offload_kqv),
+            embedding=_safe_bool(model.embedding),
+            logits_all=_safe_bool(model.logits_all),
+            verbose=_safe_bool(model.verbose),
+            mixture_of_experts=_safe_bool(getattr(model, "mixture_of_experts", False)),
         )
 
         self.temperature = config.temperature or 0.7
         self.max_tokens = config.max_tokens or 1024
         self.top_p = config.top_p or 1.0
-        self.stop_tokens = [s.strip() for s in (config.stop_tokens or "").split(",") if s.strip()] or ["</s>", "```", "\n\n"]
+        self.stop_tokens = [
+            s.strip() for s in (config.stop_tokens or "").split(",") if s.strip()
+        ] or []
 
     def generate(self, prompt: str) -> str:
         logger.debug("📝 Generating response with llama.cpp")
+        logger.debug({
+            "prompt_preview": prompt[:200] + "..." if len(prompt) > 200 else prompt,
+            "max_tokens": self.max_tokens,
+            "temperature": self.temperature,
+            "top_p": self.top_p,
+            "stop_tokens": self.stop_tokens,
+        })
+
         response = self.llm(
             prompt=prompt,
             max_tokens=self.max_tokens,
             temperature=self.temperature,
             top_p=self.top_p,
-            stop=self.stop_tokens
+            stop=self.stop_tokens,
         )
         return response["choices"][0]["text"].strip()
