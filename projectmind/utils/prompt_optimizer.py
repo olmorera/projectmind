@@ -1,17 +1,12 @@
 from loguru import logger
 from projectmind.db.session_async import get_async_session
 from projectmind.db.models.prompt import Prompt
-from sqlalchemy import select, update
+from sqlalchemy import select
 from uuid import uuid4
 
 def is_prompt_successful(response: str) -> bool:
     """
     Determines if the agent's response is considered successful.
-
-    Success criteria (can evolve):
-    - Response is not empty or whitespace.
-    - Does not contain only repeated or meaningless tokens.
-    - Length is reasonable to assume a valid response.
 
     Returns:
         bool: True if the response is useful.
@@ -29,7 +24,6 @@ def is_prompt_successful(response: str) -> bool:
 async def improve_prompt(old_prompt: str, response: str) -> str:
     """
     Generates a better version of the prompt based on the response.
-    You can evolve this function to use a prompt-tuning model or scoring logic.
 
     Args:
         old_prompt (str): The original prompt.
@@ -43,7 +37,6 @@ async def improve_prompt(old_prompt: str, response: str) -> str:
     elif "generate" in old_prompt.lower():
         return old_prompt.replace("Generate", "Generate a better version of")
     else:
-        # Fallback heuristic
         return f"Improve the following request:\n{old_prompt.strip()}"
 
 
@@ -65,7 +58,6 @@ async def optimize_prompt_if_needed(agent_name: str, prompt: str, response: str)
     new_prompt = await improve_prompt(prompt, response)
 
     async for session in get_async_session():
-        # Find current active prompt
         current = await session.execute(
             select(Prompt).filter_by(agent_name=agent_name, is_active=True)
         )
@@ -75,13 +67,12 @@ async def optimize_prompt_if_needed(agent_name: str, prompt: str, response: str)
             current_prompt.is_active = False
             logger.info(f"🔄 Deactivating previous prompt v{current_prompt.version} for agent '{agent_name}'")
 
-        # Register new improved prompt
         version = str(round(float(current_prompt.version) + 1.0, 1)) if current_prompt else "1.0"
 
         new_entry = Prompt(
             id=str(uuid4()),
             agent_name=agent_name,
-            content=new_prompt.strip(),
+            prompt=new_prompt.strip(),  # CAMBIO aquí: antes era `content`
             version=version,
             is_active=True,
         )
