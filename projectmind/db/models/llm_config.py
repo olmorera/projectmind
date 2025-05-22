@@ -11,6 +11,7 @@ class LLMConfig(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String, unique=True, nullable=False, index=True)
+    description = Column(String, nullable=True)
     llm_model_id = Column(UUID(as_uuid=True), ForeignKey("llm_models.id"), nullable=False)
     temperature = Column(Float, default=0.7)
     max_tokens = Column(Integer, default=1024)

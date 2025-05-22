@@ -1,27 +1,47 @@
-# projectmind/workflows/slack_notifier.py
+# projectmind/utils/slack_notifier.py
 
 import os
-from slack_sdk.web.async_client import AsyncWebClient
+import httpx
 from loguru import logger
 
-SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
-SLACK_CHANNEL = os.getenv("SLACK_CHANNEL", "#projectmind")
-
-if not SLACK_BOT_TOKEN:
-    raise RuntimeError("❌ SLACK_BOT_TOKEN is not set in .env")
-
-client = AsyncWebClient(token=SLACK_BOT_TOKEN)
-
+SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
 
 async def notify_slack(data: dict):
+    if not SLACK_WEBHOOK_URL:
+        logger.warning("⚠️ SLACK_WEBHOOK_URL not set. Skipping Slack notification.")
+        return
+
     try:
-        text = (
-            f"🔧 *Prompt optimized for `{data['agent']}`*\n"
-            f"> *Old (v{data['version_old']}):*\n```{data['original']}```\n"
-            f"> *New (v{data['version_new']}):*\n```{data['improved']}```\n"
-            f"> 🧠 *Model used:* `{data['model_used']}`"
-        )
-        await client.chat_postMessage(channel=SLACK_CHANNEL, text=text)
-        logger.info(f"📣 Slack notified of prompt optimization for {data['agent']}")
+        agent = data.get("agent")
+        model_used = data.get("model_used")
+        version_old = data.get("version_old")
+        version_new = data.get("version_new")
+        score_old = data.get("score_old", "N/A")
+        score_new = data.get("score_new", "N/A")
+
+        original = data.get("original", "").strip()
+        improved = data.get("improved", "").strip()
+
+        message = f"""
+🧠 *Prompt optimized for agent:* `{agent}`
+🧪 *Model used:* `{model_used}`
+📈 *Score improved:* `{score_old}` ➜ `{score_new}`
+📄 *Version:* `v{version_old}` ➜ `v{version_new}`
+
+*📝 Original prompt:*
+```text
+{original}
+```
+
+*✅ Improved prompt:*
+```text
+{improved}
+```
+"""
+
+        async with httpx.AsyncClient() as client:
+            await client.post(SLACK_WEBHOOK_URL, json={"text": message})
+        logger.success(f"📤 Slack notification sent for agent '{agent}'")
+
     except Exception as e:
-        logger.warning(f"⚠️ Failed to send Slack notification: {e}")
+        logger.error(f"❌ Failed to send Slack notification: {e}")

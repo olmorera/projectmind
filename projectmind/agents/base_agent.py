@@ -20,11 +20,23 @@ class BaseAgent:
         self.config = type("Config", (), {})()
         logger.info(f"✅ Initialized agent '{definition.name}' of type '{definition.type}'")
 
+    @property
+    def name(self) -> str:
+        return self.definition.name
+
+    @property
+    def goal(self) -> str:
+        return self.definition.goal
+
+    @property
+    def agent_type(self) -> str:
+        return self.definition.type
+
     def run(self, prompt: str) -> str:
-        logger.debug(f"🧠 Agent '{self.definition.name}' received prompt:\n{prompt}")
+        logger.debug(f"🧠 Agent '{self.name}' received prompt:\n{prompt}")
         try:
             response = self.llm.generate(prompt)
-            logger.debug(f"✅ Agent '{self.definition.name}' LLM output:\n{response}")
+            logger.debug(f"✅ Agent '{self.name}' LLM output:\n{response}")
             return response
         except Exception as e:
             logger.error(f"❌ Error while generating response: {e}")

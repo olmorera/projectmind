@@ -13,6 +13,7 @@ class LLMModel(Base):
     name = Column(String, unique=True, nullable=False, index=True)
     provider = Column(String, nullable=False)           # llama / openai / ...
     model = Column(String, nullable=False)              # ruta GGUF o nombre OpenAI
+    description = Column(String, nullable=True)
 
     # Recursos
     n_threads = Column(Integer, default=8)
