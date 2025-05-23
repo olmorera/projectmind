@@ -45,3 +45,21 @@ class PromptManager:
         await self.session.commit()
         logger.info(f"🔄 New version for '{old_prompt.agent_name}' -> v{new_prompt.version}")
         return new_prompt
+    
+    async def update_effectiveness_score(self, agent_name: str, task_type: str, score: int):
+        result = await self.session.execute(
+            select(Prompt)
+            .where(Prompt.agent_name == agent_name)
+            .where(Prompt.task_type == task_type)
+            .where(Prompt.is_active == True)
+        )
+        prompt = result.scalar_one_or_none()
+        if prompt:
+            prompt.effectiveness_score = score
+            await self.session.commit()
+            logger.info(f"📌 Updated effectiveness score to {score} for '{agent_name}'")
+        else:
+            logger.warning(f"⚠️ Could not find active prompt to update score for '{agent_name}'")
+
+
+

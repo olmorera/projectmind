@@ -13,6 +13,7 @@ from projectmind.db.session_async import AsyncSessionLocal
 from projectmind.utils.context_handler import load_context, save_context
 from projectmind.utils.prompt_optimizer import maybe_optimize_prompt
 from projectmind.utils.task_handler import try_saving_tasks
+from projectmind.llm.prompt_formatter import format_prompt
 
 
 async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
@@ -69,10 +70,15 @@ async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
         # Load context
         context = await load_context(session, agent_row, agent, project, agent_name)
-        full_prompt = f"{context}\n\n{prompt_obj.prompt}\n\n{input_text}" if context else f"{prompt_obj.prompt}\n\n{input_text}"
 
-        # Run agent
-        output = agent.run(full_prompt)
+        # ✅ Asignar prompt al agente y construir input final con contexto
+        agent.definition.prompt = prompt_obj.prompt.strip()
+
+        if context:
+            input_text = f"{context.strip()}\n\n{input_text.strip()}"
+
+        # ✅ Ejecutar usando lógica centralizada en BaseAgent
+        output = agent.run(input_text)
 
         # Save context and tasks
         await save_context(session, agent_row, agent, project, agent_name, output)

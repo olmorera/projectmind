@@ -2,8 +2,9 @@
 
 from pydantic import BaseModel, Field
 from loguru import logger
-from typing import Optional, Literal
+from typing import Optional
 from projectmind.llm.llama_provider import LlamaProvider
+from projectmind.llm.prompt_formatter import format_prompt
 
 class AgentDefinition(BaseModel):
     name: str
@@ -11,13 +12,13 @@ class AgentDefinition(BaseModel):
     goal: str
     type: str
     prompt: Optional[str] = None
+    test_input: Optional[str] = None
     metadata: dict = Field(default_factory=dict)
 
 class BaseAgent:
     def __init__(self, definition: AgentDefinition, llm: LlamaProvider):
         self.definition = definition
-        self.llm = llm  # LlamaProvider instance
-        self.config = type("Config", (), {})()
+        self.llm = llm
         logger.info(f"✅ Initialized agent '{definition.name}' of type '{definition.type}'")
 
     @property
@@ -32,12 +33,20 @@ class BaseAgent:
     def agent_type(self) -> str:
         return self.definition.type
 
-    def run(self, prompt: str) -> str:
-        logger.debug(f"🧠 Agent '{self.name}' received prompt:\n{prompt}")
+    def run(self, input: str) -> str:
+        logger.debug(f"🧠 Agent '{self.name}' received input:\n{input}")
+
         try:
-            response = self.llm.generate(prompt)
-            logger.debug(f"✅ Agent '{self.name}' LLM output:\n{response}")
+            messages = format_prompt(
+                prompt_base=self.definition.prompt or "",
+                user_input=input,
+                chat_format=self.llm.model.chat_format or "llama-2"
+            )
+
+            response = self.llm.chat(messages)
+            logger.debug(f"✅ LLM response:\n{response}")
             return response
+
         except Exception as e:
-            logger.error(f"❌ Error while generating response: {e}")
+            logger.error(f"❌ Error generating response: {e}")
             return f"⚠️ Failed to generate response: {str(e)}"

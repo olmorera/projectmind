@@ -12,6 +12,7 @@ class Agent(Base):
     name = Column(String, unique=True, nullable=False, index=True)
     type = Column(String, nullable=False, index=True)
     goal = Column(Text, nullable=False)
+    test_input = Column(Text, nullable=True)
     llm_config_id = Column(UUID(as_uuid=True), ForeignKey("llm_configs.id"), nullable=True)
     use_memory = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True, index=True)
