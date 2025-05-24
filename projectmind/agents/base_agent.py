@@ -1,5 +1,3 @@
-# projectmind/agents/base_agent.py
-
 from pydantic import BaseModel, Field
 from loguru import logger
 from typing import Optional
@@ -11,8 +9,8 @@ class AgentDefinition(BaseModel):
     role: str
     goal: str
     type: str
-    prompt: Optional[str] = None
-    test_input: Optional[str] = None
+    system_prompt: Optional[str] = None
+    user_prompt: Optional[str] = None
     metadata: dict = Field(default_factory=dict)
 
 class BaseAgent:
@@ -37,16 +35,16 @@ class BaseAgent:
         logger.debug(f"🧠 Agent '{self.name}' received input:\n{input}")
 
         try:
-            prompt_base = self.definition.prompt
-            if not prompt_base or not isinstance(prompt_base, str):
-                raise ValueError(f"❌ Invalid or missing prompt for agent '{self.name}'")
+            system_prompt = self.definition.system_prompt
+            if not system_prompt or not isinstance(system_prompt, str):
+                raise ValueError(f"❌ Invalid or missing system prompt for agent '{self.name}'")
 
             if not input or not isinstance(input, str):
                 raise ValueError(f"❌ Invalid user input for agent '{self.name}'")
 
             messages = format_prompt(
-                prompt_base=prompt_base.strip(),
-                user_input=input.strip(),
+                system_prompt=system_prompt.strip(),
+                user_prompt=input.strip(),
                 chat_format=self.llm.model.chat_format or "llama-2"
             )
 

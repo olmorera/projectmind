@@ -4,13 +4,12 @@ from loguru import logger
 from sqlalchemy import select
 from projectmind.db.session_async import get_async_session
 from projectmind.db.models.agent import Agent
-from projectmind.agents.agent_factory import create
-from projectmind.llm.llama_provider import LlamaProvider
+from projectmind.agents.agent_factory import AgentFactory
 
 
 async def improve_prompt(
     original_prompt: str,
-    user_input: str,
+    user_prompt: str,
     response: str,
     score: float,
     agent_name: str,
@@ -29,8 +28,7 @@ async def improve_prompt(
         if not agent_row:
             raise ValueError(f"⚠️ Agent '{prompt_optimizer_name}' not found in database.")
 
-        model = LlamaProvider(agent_row.model_name)
-        agent = create(agent_row, model)
+        agent = AgentFactory.create(agent_row.name)
 
         logger.debug(f"🔧 Improving prompt for '{agent_name}' (score: {score})")
 
@@ -39,7 +37,7 @@ async def improve_prompt(
             f"You are an expert prompt engineer.\n"
             f"Your job is to improve the SYSTEM PROMPT used by an AI agent.\n\n"
             f"---\nOriginal SYSTEM PROMPT:\n{original_prompt.strip()}\n\n"
-            f"---\nUSER INPUT:\n{user_input.strip()}\n\n"
+            f"---\nUSER INPUT:\n{user_prompt.strip()}\n\n"
             f"---\nAGENT RESPONSE:\n{response.strip()}\n\n"
             f"---\nEFFECTIVENESS SCORE: {score}\n\n"
             f"Now, improve the SYSTEM PROMPT to help the agent respond better next time.\n"

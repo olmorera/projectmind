@@ -148,10 +148,10 @@ AGENT_CONFIG = {
             "- Avoid vague steps or unnecessary context\n\n"
             "Provide only the task list."
         ),
-        "test_input": "Create an app that allows users to register, reset their password, and browse products."
+        "test_prompt": "Create an app that allows users to register, reset their password, and browse products."
     },
     "frontend_generator": {
-        "model": "mixtral-8x7b-instruct.Q5_K_M.gguf",
+        "model": "Mixtral-8x7B-Instruct-v0.1.Q5_K_M.gguf",
         "type": "frontend",
         "goal": "Generate responsive, well-structured UI using Svelte and TailwindCSS.",
         "system_prompt": (
@@ -160,7 +160,7 @@ AGENT_CONFIG = {
             "Your output should be organized into files using headers like 'File: src/components/Login.svelte'.\n"
             "Avoid any explanations. Ensure accessibility and responsiveness."
         ),
-        "test_input": "Generate a signup form with name, email, password, and submit button."
+        "test_prompt": "Generate a signup form with name, email, password, and submit button."
     },
     "backend_generator": {
         "model": "deepseek-coder-6.7b-instruct.Q5_K_M.gguf",
@@ -174,7 +174,7 @@ AGENT_CONFIG = {
             "- Supabase RPCs (via SQL functions)\n\n"
             "Group your output by file using 'File:' headers, and avoid any explanations."
         ),
-        "test_input": "Build backend for a task manager with user-specific task lists, deadlines, and status updates."
+        "test_prompt": "Build backend for a task manager with user-specific task lists, deadlines, and status updates."
     },
     "prompt_optimizer": {
         "model": "zephyr-7b-beta.Q5_K_M.gguf",
@@ -186,7 +186,7 @@ AGENT_CONFIG = {
             "Do not change its intent. Return only the improved version.\n\n"
             "PROMPT:\n{prompt}"
         ),
-        "test_input": "Make this prompt better: Generate an HTML page with a navbar and two sections."
+        "test_prompt": "Make this prompt better: Generate an HTML page with a navbar and two sections."
     },
     "code_reviewer": {
         "model": "wizardcoder-python-34b-v1.0.Q5_K_M.gguf",
@@ -198,7 +198,7 @@ AGENT_CONFIG = {
             "Point out bugs or potential issues and suggest improvements using bullet points.\n\n"
             "CODE:\n{code}"
         ),
-        "test_input": "Review this function: def is_even(n): return n % 2 == 1"
+        "test_prompt": "Review this function: def is_even(n): return n % 2 == 1"
     },
     "prompt_evaluator": {
         "model": "phi-2.Q5_K_M.gguf",
@@ -207,12 +207,12 @@ AGENT_CONFIG = {
         "system_prompt": (
             "You are an evaluator.\n"
             "Rate from 1 (terrible) to 10 (perfect) how well the AGENT RESPONSE fulfills the USER REQUEST.\n\n"
-            "USER REQUEST:\n{user_input}\n\n"
+            "USER REQUEST:\n{user_prompt}\n\n"
             "AGENT RESPONSE:\n{response}\n\n"
             "⚠️ Respond ONLY with a single number between 1 and 10.\n"
             "❌ Do NOT explain. Do NOT repeat anything. Just return the number."
         ),
-        "test_input": "RESPONSE: Hello! Let me know how I can help you today."
+        "test_prompt": "RESPONSE: Hello! Let me know how I can help you today."
     }
 }
 
@@ -276,7 +276,7 @@ async def bootstrap():
                 can_execute_tasks=True,
                 optimize_prompt=(agent_name != "prompt_optimizer"),
                 is_active=True,
-                test_input=cfg.get("test_input")
+                test_prompt=cfg.get("test_prompt")
             )
             session.add(agent)
             await session.flush()

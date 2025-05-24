@@ -53,12 +53,12 @@ class PromptManager:
         await self.session.commit()
         logger.info(f"✅ Registered new prompt version for '{old_prompt.agent_name}' → v{new_version}")
 
-    async def evaluate_and_optimize_if_needed(self, agent_row, system_prompt: str, user_input: str, response: str):
+    async def evaluate_and_optimize_if_needed(self, agent_row, system_prompt: str, user_prompt: str, response: str):
         from projectmind.utils.prompt_optimizer import maybe_optimize_prompt
         from projectmind.utils.agent_evaluator import evaluate_effectiveness_score
 
         try:
-            score = await evaluate_effectiveness_score(response, goal=system_prompt)
+            score = await evaluate_effectiveness_score(system_prompt, user_prompt, response)
             logger.info(f"📊 Evaluated effectiveness score: {score}")
             await self.update_effectiveness_score(agent_row.name, "default", score)
 
@@ -67,7 +67,7 @@ class PromptManager:
                     agent_row=agent_row,
                     prompt_manager=self,
                     system_prompt=system_prompt,
-                    user_input=user_input,
+                    user_prompt=user_prompt,
                     response=response,
                 )
         except Exception as e:

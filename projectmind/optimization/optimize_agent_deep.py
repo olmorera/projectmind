@@ -18,7 +18,7 @@ async def session_context():
     async for session in get_async_session():
         yield session
 
-async def optimize_agent(agent_name: str, test_input: str):
+async def optimize_agent(agent_name: str, user_prompt: str):
     logger.info(f"🔍 Starting deep optimization for agent: {agent_name}")
 
     async with session_context() as session:
@@ -28,20 +28,21 @@ async def optimize_agent(agent_name: str, test_input: str):
             logger.info(f"⚙️ Attempt {attempt}/{MAX_ATTEMPTS} for '{agent_name}'")
 
             try:
-                result = await run_agent_once(agent_name, input=test_input, return_full_info=True)
-                response = result.get("output")
-                prompt = result.get("prompt_used")
-                goal = result.get("goal")
+                result = await run_agent_once(agent_name, user_prompt, return_full_info=True)
+                response = result.get("response")
+                system_prompt = result.get("system_prompt")
+                #user_prompt = result.get("input")
 
-                if not response or not goal:
-                    logger.warning(f"⚠️ Skipping attempt due to missing response or goal. Response: {response}, Goal: {goal}")
+                if not response or not user_prompt:
+                    logger.warning(f"⚠️ Skipping attempt due to missing response or user prompt. Response: {response}, Prompt: {user_prompt}")
                     continue
 
-                logger.debug(f"📤 Prompt used: {prompt}")
+                logger.debug(f"📤 System Prompt: {system_prompt}")
+                logger.debug(f"📤 User Prompt: {user_prompt}")
                 logger.debug(f"📥 Response received: {response}")
 
                 # 🧪 Evaluate score
-                score = await evaluate_effectiveness_score(response, goal=goal)
+                score = await evaluate_effectiveness_score(system_prompt, user_prompt, response)
                 logger.info(f"📊 Effectiveness score: {score}")
 
                 # 💾 Update effectiveness score in prompt table
@@ -53,7 +54,7 @@ async def optimize_agent(agent_name: str, test_input: str):
 
                 # ✨ Improve and version prompt
                 old_prompt = await manager.get_latest_prompt(agent_name, "default")
-                improved = await improve_prompt(prompt)
+                improved = await improve_prompt(system_prompt)
                 await manager.register_prompt_version(old_prompt, improved)
                 logger.info(f"🧠 Improved prompt registered for agent '{agent_name}'")
 
@@ -64,17 +65,17 @@ async def optimize_agent(agent_name: str, test_input: str):
 async def main():
     async with session_context() as session:
         result = await session.execute(
-            select(Agent.name, Agent.test_input).where(Agent.is_active == True)
+            select(Agent.name, Agent.user_prompt).where(Agent.is_active == True)
         )
         agents = result.fetchall()
 
     logger.info(f"🔁 Optimizing {len(agents)} agents...")
 
-    for name, test_input in agents:
-        if not test_input:
-            logger.warning(f"⚠️ Skipping '{name}' — no test_input defined.")
+    for name, user_prompt in agents:
+        if not user_prompt:
+            logger.warning(f"⚠️ Skipping '{name}' — no user_prompt defined.")
             continue
-        await optimize_agent(name, test_input)
+        await optimize_agent(name, user_prompt=user_prompt)
 
 if __name__ == "__main__":
     asyncio.run(main())

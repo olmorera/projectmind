@@ -15,24 +15,24 @@ DEFAULT_TEST_INPUTS = {
 }
 
 def bootstrap_test_inputs():
-    logger.info("🧠 Initializing agent test_input population...")
+    logger.info("🧠 Initializing agent test_prompt population...")
 
     with Session(engine) as session:
         agents = session.query(Agent).all()
         updated = 0
 
         for agent in agents:
-            if agent.test_input:
+            if agent.test_prompt:
                 continue
 
-            test_input = DEFAULT_TEST_INPUTS.get(agent.name)
-            if test_input:
-                agent.test_input = test_input
-                logger.info(f"✅ Setting test_input for '{agent.name}'")
+            test_prompt = DEFAULT_TEST_INPUTS.get(agent.name)
+            if test_prompt:
+                agent.test_prompt = test_prompt
+                logger.info(f"✅ Setting test_prompt for '{agent.name}'")
                 updated += 1
 
         session.commit()
-        logger.success(f"🎯 Updated {updated} agent(s) with test_input.")
+        logger.success(f"🎯 Updated {updated} agent(s) with test_prompt.")
 
 if __name__ == "__main__":
     bootstrap_test_inputs()

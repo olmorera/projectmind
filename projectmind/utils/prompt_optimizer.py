@@ -10,7 +10,7 @@ async def maybe_optimize_prompt(
     agent_row,
     prompt_manager: PromptManager,
     system_prompt: str,
-    user_input: str,
+    user_prompt: str,
     response: str,
 ):
     try:
@@ -20,7 +20,7 @@ async def maybe_optimize_prompt(
             return
 
         # Obtener score de efectividad
-        score = await evaluate_effectiveness_score(response, goal=agent_row.goal)
+        score = await evaluate_effectiveness_score(system_prompt, user_prompt, response)
         if score is None:
             logger.warning(f"⚠️ Could not extract a valid score for agent '{agent_row.name}'")
             return
@@ -34,20 +34,20 @@ async def maybe_optimize_prompt(
 
         # Prompt base desde DB o fallback al proporcionado
         old_prompt = await prompt_manager.get_latest_prompt(agent_row.name, "default")
-        base_prompt = old_prompt.prompt if old_prompt and old_prompt.prompt else system_prompt
+        base_prompt = old_prompt.system_prompt if old_prompt and old_prompt.system_prompt else system_prompt
 
         if not base_prompt or not base_prompt.strip():
             logger.warning(f"❌ No valid base prompt to improve for agent '{agent_row.name}'")
             return
 
         # Mejora del prompt
-        improved_prompt = await improve_prompt(base_prompt, user_input, response, score, agent_row.name)
+        improved_prompt = await improve_prompt(base_prompt, user_prompt, response, score, agent_row.name)
 
         if not improved_prompt or not improved_prompt.strip():
             logger.warning(f"❌ Skipped saving: Improved prompt is invalid for agent '{agent_row.name}'")
             return
 
-        if old_prompt and old_prompt.prompt.strip() == improved_prompt.strip():
+        if old_prompt and old_prompt.system_prompt.strip() == improved_prompt.strip():
             logger.info(f"ℹ️ Skipped saving: Improved prompt is identical to current one for agent '{agent_row.name}'")
             return
 

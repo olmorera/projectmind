@@ -19,11 +19,11 @@ from projectmind.utils.prompt_optimizer import maybe_optimize_prompt
 
 async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
     agent_name = state.get("agent_name")
-    user_input = state.get("input")
+    user_prompt = state.get("input")
     project_name = state.get("project_name")
     slack_user = state.get("slack_user")
 
-    if not agent_name or user_input is None:
+    if not agent_name or user_prompt is None:
         raise ValueError("Missing 'agent_name' and/or 'input' in state")
 
     logger.info(f"🤖 Executing agent: {agent_name}")
@@ -40,14 +40,14 @@ async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
         agent = AgentFactory.create(agent_name)
 
         # Translate if needed
-        translated_input, was_translated = translate_to_english(user_input)
-        input_text = translated_input if was_translated else user_input
+        translated_input, was_translated = translate_to_english(user_prompt)
+        input_text = translated_input if was_translated else user_prompt
 
         if was_translated:
             await notify_slack({
                 "agent": agent_name,
                 "note": "Input was auto-translated to English.",
-                "original_input": user_input,
+                "original_input": user_prompt,
                 "translated_input": translated_input
             })
 
@@ -73,7 +73,7 @@ async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
         context = await load_context(session, agent_row, agent, project, agent_name)
 
         # Set prompt and format input
-        agent.definition.prompt = prompt_obj.system_prompt.strip()
+        agent.definition.system_prompt = prompt_obj.system_prompt.strip()
         if context:
             input_text = f"{context.strip()}\n\n{input_text.strip()}"
 
@@ -88,7 +88,7 @@ async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
         run = AgentRun(
             agent_name=agent_name,
             task_type="default",
-            input_data=user_input,
+            input_data=user_prompt,
             output_data=output,
             is_successful=bool(output),
             effectiveness_score=None,
@@ -112,18 +112,18 @@ async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
         logger.success(f"✅ Agent run saved: {run.id}")
 
         # 🧠 Evaluar y mejorar prompt si es necesario
-        try:
-            if agent_row.type != "evaluate":
-                prompt_manager = PromptManager(session)
-                await maybe_optimize_prompt(
-                    agent_row,
-                    prompt_manager,
-                    system_prompt=prompt_obj.system_prompt.strip(),
-                    user_input=user_input,
-                    response=output
-                )
-        except Exception as e:
-            logger.warning(f"⚠️ Prompt optimization failed for '{agent_name}': {e}")
+        # try:
+        #     if agent_row.type != "evaluate":
+        #         prompt_manager = PromptManager(session)
+        #         await maybe_optimize_prompt(
+        #             agent_row,
+        #             prompt_manager,
+        #             system_prompt=prompt_obj.system_prompt.strip(),
+        #             user_prompt=user_prompt,
+        #             response=output
+        #         )
+        # except Exception as e:
+        #     logger.warning(f"⚠️ Prompt optimization failed for '{agent_name}': {e}")
 
         return {
             **state,

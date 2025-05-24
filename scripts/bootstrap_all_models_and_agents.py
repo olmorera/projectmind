@@ -114,35 +114,35 @@ AGENT_CONFIG = {
         "type": "plan",
         "goal": "Break down complex user goals into structured technical tasks.",
         "prompt": "You are a planning assistant. Break down the user's objective into clear, executable tasks for developers or AI agents. Each task should be specific, ordered, and technically feasible.",
-        "test_input": "I want to build a website that includes user login, a contact form, and a blog section."
+        "test_prompt": "I want to build a website that includes user login, a contact form, and a blog section."
     },
     "frontend_generator": {
         "model": "wizardcoder-python-34b-v1.0.Q5_K_M.gguf",
         "type": "frontend",
         "goal": "Generate structured and valid frontend UI code using Svelte and Tailwind.",
         "prompt": "You are a frontend expert. Generate clean Svelte components styled with TailwindCSS. Group code by file using 'File:' headers. Avoid explanations and ensure mobile responsiveness.",
-        "test_input": "Create a login page with email and password using TailwindCSS."
+        "test_prompt": "Create a login page with email and password using TailwindCSS."
     },
     "backend_generator": {
         "model": "deepseek-coder-6.7b-instruct.Q5_K_M.gguf",
         "type": "backend",
         "goal": "Generate secure Supabase backend logic and database structures.",
         "prompt": "You are a backend engineer. Generate Supabase-compatible backend logic including RPCs, SQL policies, and protected endpoints. Use clear naming and ensure user data safety.",
-        "test_input": "Generate Supabase endpoints for managing blog posts and user data."
+        "test_prompt": "Generate Supabase endpoints for managing blog posts and user data."
     },
     "prompt_optimizer": {
         "model": "zephyr-7b-beta.Q5_K_M.gguf",
         "type": "optimize",
         "goal": "Improve prompt clarity, effectiveness, and structure without altering its meaning.",
         "prompt": "You are an expert in prompt optimization. Rewrite the following prompt to be clearer, more focused, and technically robust while preserving its intent. Return only the improved prompt.",
-        "test_input": "Improve this prompt: Write a Python function to reverse a string."
+        "test_prompt": "Improve this prompt: Write a Python function to reverse a string."
     },
     "code_reviewer": {
         "model": "deepseek-coder-6.7b-instruct.Q5_K_M.gguf",
         "type": "review",
         "goal": "Review generated code and suggest improvements, detect bugs, or optimize structure.",
         "prompt": "You are a senior code reviewer. Analyze the following code snippet, detect logic errors, and suggest concrete improvements. Return your suggestions in bullet points.",
-        "test_input": "Review this code: def sum(a, b): return a + b"
+        "test_prompt": "Review this code: def sum(a, b): return a + b"
     },
     "prompt_evaluator": {
         "model": "zephyr-7b-beta.Q5_K_M.gguf",
@@ -153,7 +153,7 @@ AGENT_CONFIG = {
             "GOAL:\n{goal}\n\nRESPONSE:\n{response}\n\n"
             "Please answer with a single integer number from 1 (terrible) to 10 (perfect). Do not explain your answer."
         ),
-        "test_input": "Rate this response: Hello world — for goal: greet the user."
+        "test_prompt": "Rate this response: Hello world — for goal: greet the user."
     }
 }
 
@@ -216,7 +216,7 @@ async def bootstrap():
                 can_execute_tasks=True,
                 optimize_prompt=(agent_name != "prompt_optimizer"),
                 is_active=True,
-                test_input=config.get("test_input")
+                test_prompt=config.get("test_prompt")
             )
             session.add(agent)
             await session.flush()

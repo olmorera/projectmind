@@ -2,46 +2,29 @@
 
 from typing import List, Dict
 
-
-def format_prompt(prompt_base: str, user_input: str, chat_format: str) -> List[Dict[str, str]]:
+def format_prompt(
+    system_prompt: str,
+    user_prompt: str,
+    chat_format: str,
+    chat_template: str | None = None
+) -> List[Dict[str, str]]:
     """
     Builds the structured list of messages to be sent to the LLM,
-    based on the specified chat_format.
+    relying on the model's tokenizer.chat_template for formatting.
 
     Args:
-        prompt_base (str): The base system prompt from the prompts table.
-        user_input (str): The specific task or instruction.
-        chat_format (str): The model's expected format (e.g. 'chatml', 'llama-2').
+        system_prompt (str): The base system prompt.
+        user_prompt (str): The specific user task or query.
+        chat_format (str): The declared format of the model.
+        chat_template (Optional[str]): Optional raw template string from GGUF metadata.
 
     Returns:
-        List[Dict[str, str]]: Structured list of messages ready for LLM input.
+        List[Dict[str, str]]: Structured message list for LLM chat input.
     """
+    system_prompt = system_prompt.strip()
+    user_prompt = user_prompt.strip()
 
-    if chat_format in ("chatml", "openchat", "zephyr", "mistral", "openhermes"):
-        # Most chat-based formats use role-based inputs
-        return [
-            {"role": "system", "content": prompt_base},
-            {"role": "user", "content": user_input}
-        ]
-    
-    elif chat_format == "llama-2":
-        # LLaMA 2 format uses special INST tags
-        content = f"<<SYS>>\n{prompt_base}\n<</SYS>>\n\n{user_input}"
-        return [
-            {"role": "user", "content": f"[INST] {content} [/INST]"}
-        ]
-    
-    elif chat_format == "phi-2":
-        # PHI-2 doesn't support chat, send plain text
-        return [
-            {"role": "user", "content": f"{prompt_base}\n\n{user_input}"}
-        ]
-    
-    elif chat_format == "none" or not chat_format:
-        # No chat format, fallback to direct concatenation
-        return [
-            {"role": "user", "content": f"{prompt_base}\n\n{user_input}"}
-        ]
-
-    else:
-        raise ValueError(f"Unsupported chat_format: {chat_format}")
+    return [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt}
+    ]

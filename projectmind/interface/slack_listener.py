@@ -45,16 +45,16 @@ async def list_agents(event, say):
 
 @app.message("")
 async def handle_message(event, say):
-    user_input = event.get("text", "").strip()
+    user_prompt = event.get("text", "").strip()
     user = event["user"]
-    logger.info(f"📩 Message from {user}: {user_input}")
+    logger.info(f"📩 Message from {user}: {user_prompt}")
 
-    if not user_input:
+    if not user_prompt:
         await say("⚠️ I didn't receive any input.")
         return
 
     try:
-        agent_name, input_text = parse_message(user_input)
+        agent_name, input_text = parse_message(user_prompt)
 
         flow = agent_flow()
 

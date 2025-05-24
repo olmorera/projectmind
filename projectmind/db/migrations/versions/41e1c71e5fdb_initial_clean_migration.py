@@ -1,8 +1,8 @@
 """Initial clean migration
 
-Revision ID: 7a768c93cc61
+Revision ID: 41e1c71e5fdb
 Revises: 
-Create Date: 2025-05-24 08:19:59.796019
+Create Date: 2025-05-24 13:12:24.349715
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = '7a768c93cc61'
+revision: str = '41e1c71e5fdb'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -149,7 +149,7 @@ def upgrade() -> None:
     sa.Column('name', sa.String(), nullable=False),
     sa.Column('type', sa.String(), nullable=False),
     sa.Column('goal', sa.Text(), nullable=False),
-    sa.Column('test_input', sa.Text(), nullable=True),
+    sa.Column('test_prompt', sa.Text(), nullable=True),
     sa.Column('llm_config_id', sa.UUID(), nullable=True),
     sa.Column('use_memory', sa.Boolean(), nullable=True),
     sa.Column('is_active', sa.Boolean(), nullable=True),

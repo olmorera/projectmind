@@ -1,5 +1,3 @@
-# projectmind/llm/llama_provider.py
-
 import os
 from llama_cpp import Llama
 from projectmind.models.chat_message import ChatMessage
@@ -54,10 +52,17 @@ class LlamaProvider:
         for k, v in self.llm.metadata.items():
             logger.debug(f"{k}: {v}")
 
+    @property
+    def chat_template(self) -> str | None:
+        return self.llm.metadata.get("tokenizer.chat_template")
+
     def chat(self, messages: list[ChatMessage | dict]) -> str:
         logger.debug("🗨️ Generating response using structured chat format")
 
-        formatted_messages = [m.dict() if isinstance(m, ChatMessage) else ChatMessage(**m).dict() for m in messages]
+        formatted_messages = [
+            m.dict() if isinstance(m, ChatMessage) else ChatMessage(**m).dict()
+            for m in messages
+        ]
 
         logger.debug({
             "messages": formatted_messages,
