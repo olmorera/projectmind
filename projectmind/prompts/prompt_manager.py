@@ -1,7 +1,9 @@
-# projectmind/prompts/prompt_manager.py
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from projectmind.db.models.prompt import Prompt
+from projectmind.utils.agent_evaluator import evaluate_effectiveness_score
+from projectmind.agents.agent_factory import AgentFactory
+from projectmind.utils.slack_notifier import notify_slack
 from loguru import logger
 
 
@@ -45,7 +47,7 @@ class PromptManager:
         await self.session.commit()
         logger.info(f"🔄 New version for '{old_prompt.agent_name}' -> v{new_prompt.version}")
         return new_prompt
-    
+
     async def update_effectiveness_score(self, agent_name: str, task_type: str, score: int):
         result = await self.session.execute(
             select(Prompt)
@@ -61,5 +63,52 @@ class PromptManager:
         else:
             logger.warning(f"⚠️ Could not find active prompt to update score for '{agent_name}'")
 
+    async def evaluate_and_optimize_if_needed(
+        self, agent_row, system_prompt: str, user_input: str, response: str
+    ):
+        from projectmind.utils.prompt_optimizer import maybe_optimize_prompt
+        from projectmind.utils.agent_evaluator import evaluate_effectiveness_score
+
+        if not response.strip():
+            logger.warning(f"⚠️ Skipping evaluation: no output was generated for agent '{agent_row.name}'")
+            return
+
+        score = await evaluate_effectiveness_score(system_prompt, user_input, response)
+        await self.update_effectiveness_score(agent_row.name, "default", score)
+
+        if score < 7 and agent_row.optimize_prompt:
+            await maybe_optimize_prompt(agent_row, {
+                "system_prompt": system_prompt,
+                "input": user_input,
+                "output": response
+            }, score)
 
 
+    async def maybe_optimize_prompt(self, agent_row, prompt_obj: Prompt, run_result: dict, score: int):
+        logger.warning(f"⚠️ Score {score} is low, triggering optimization for '{agent_row.name}'")
+
+        optimizer = AgentFactory.create("prompt_optimizer")
+        optimization_prompt = (
+            f"You are a senior prompt engineer optimizing prompts for AI agents.\n\n"
+            f"--- Current Prompt ---\n{run_result['system_prompt']}\n\n"
+            f"--- Agent ---\n{agent_row.name}\n\n"
+            f"--- User Input ---\n{run_result['input']}\n\n"
+            f"--- Model Output ---\n{run_result['output']}\n\n"
+            f"--- Evaluation Score ---\n{score}\n\n"
+            f"Your task is to rewrite the system prompt to better guide the model in generating relevant, complete, and safe output.\n"
+            f"Return ONLY the improved prompt."
+        )
+
+        improved_prompt = optimizer.run(optimization_prompt)
+
+        new_prompt = await self.register_prompt_version(prompt_obj, improved_prompt)
+
+        await notify_slack({
+            "agent": agent_row.name,
+            "prompt_id": str(prompt_obj.id),
+            "version_old": prompt_obj.version,
+            "version_new": new_prompt.version,
+            "model_used": agent_row.model_name,
+            "original": prompt_obj.content,
+            "improved": improved_prompt
+        })

@@ -7,20 +7,24 @@ from projectmind.db.models import AgentRun, Prompt
 from projectmind.prompts.prompt_manager import PromptManager
 from projectmind.agents.agent_factory import AgentFactory
 from projectmind.utils.slack_notifier import notify_slack
-from projectmind.db.session_async import AsyncSessionLocal  # ✅ USO CORRECTO
+from projectmind.db.session_async import AsyncSessionLocal
+
 
 def is_output_weak(output: str) -> bool:
     if not output or len(output.strip()) < 50:
         return True
     lines = output.strip().splitlines()
-    return len(set(lines)) < (len(lines) * 0.5)
+    unique_ratio = len(set(lines)) / max(len(lines), 1)
+    return unique_ratio < 0.5
+
 
 def calculate_effectiveness(output: str) -> float:
     if not output or len(output.strip()) < 30:
         return 0.0
-    unique_lines = len(set(output.strip().splitlines()))
-    total_lines = len(output.strip().splitlines())
-    return round(unique_lines / total_lines, 3)
+    lines = output.strip().splitlines()
+    unique_ratio = len(set(lines)) / max(len(lines), 1)
+    return round(unique_ratio, 3)
+
 
 async def optimize_agent_prompt_and_config(agent_row):
     agent = AgentFactory.create(agent_row.name)
@@ -28,7 +32,11 @@ async def optimize_agent_prompt_and_config(agent_row):
     async with AsyncSessionLocal() as session:
         result = await session.execute(
             select(Prompt)
-            .where(Prompt.agent_name == agent.name, Prompt.task_type == "default", Prompt.is_active == True)
+            .where(
+                Prompt.agent_name == agent.name,
+                Prompt.task_type == "default",
+                Prompt.is_active == True
+            )
             .order_by(Prompt.version.desc())
             .limit(1)
         )
@@ -38,7 +46,17 @@ async def optimize_agent_prompt_and_config(agent_row):
             return
 
         prompt_text = prompt_obj.prompt
-        output = agent.run(prompt_text)
+
+        try:
+            output = agent.run(prompt_text)
+        except Exception as e:
+            logger.error(f"❌ Error running agent '{agent.name}': {e}")
+            return
+
+        if not output or not output.strip():
+            logger.warning(f"⚠️ Empty or invalid output from agent '{agent.name}', skipping...")
+            return
+
         effectiveness = calculate_effectiveness(output)
 
         run = AgentRun(
@@ -62,8 +80,10 @@ async def optimize_agent_prompt_and_config(agent_row):
         session.add(run)
 
         if is_output_weak(output) and agent_row.optimize_prompt:
+            logger.info(f"🔧 Weak output detected for '{agent.name}', running optimization...")
             optimizer = AgentFactory.create("prompt_optimizer")
             reason = "Output was too short or repetitive."
+
             optimization_prompt = (
                 f"You are a senior prompt engineer optimizing prompts for AI agents.\n\n"
                 f"--- Prompt (v{prompt_obj.version}) ---\n{prompt_text}\n\n"
@@ -81,20 +101,26 @@ async def optimize_agent_prompt_and_config(agent_row):
                 f"Return only the improved prompt.\n"
             )
 
-            improved_prompt = optimizer.run(optimization_prompt)
+            try:
+                improved_prompt = optimizer.run(optimization_prompt)
+                if not improved_prompt or "prompt" not in improved_prompt.lower():
+                    logger.warning("⚠️ Optimized prompt looks invalid or too short, skipping update.")
+                    return
 
-            manager = PromptManager(session)
-            new_prompt = await manager.register_prompt_version(prompt_obj, improved_prompt)
+                manager = PromptManager(session)
+                new_prompt = await manager.register_prompt_version(prompt_obj, improved_prompt)
 
-            await notify_slack({
-                "agent": agent.name,
-                "prompt_id": str(prompt_obj.id),
-                "version_old": prompt_obj.version,
-                "version_new": new_prompt.version,
-                "model_used": agent.llm.model.name,
-                "original": prompt_text,
-                "improved": improved_prompt
-            })
+                await notify_slack({
+                    "agent": agent.name,
+                    "prompt_id": str(prompt_obj.id),
+                    "version_old": prompt_obj.version,
+                    "version_new": new_prompt.version,
+                    "model_used": agent.llm.model.name,
+                    "original": prompt_text,
+                    "improved": improved_prompt
+                })
+            except Exception as e:
+                logger.error(f"❌ Failed to optimize prompt for agent '{agent.name}': {e}")
 
         await session.commit()
         logger.success(f"✅ Optimization run completed for {agent.name}")

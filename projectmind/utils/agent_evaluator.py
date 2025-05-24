@@ -2,19 +2,20 @@ from projectmind.agents.agent_factory import AgentFactory
 from loguru import logger
 import re
 
-async def evaluate_effectiveness_score(response: str, goal: str) -> int:
-    """
-    Uses the 'prompt_evaluator' agent to evaluate how well a response fulfills a goal.
-    Returns a score from 1 to 10.
-    """
+async def evaluate_effectiveness_score(system_prompt: str, user_input: str, response: str) -> int:
+    if not response.strip():
+        logger.warning("⚠️ Skipping evaluation: agent response is empty.")
+        return 1  # peor puntaje posible
+
     agent = AgentFactory.create("prompt_evaluator")
 
     eval_prompt = (
-        "You are an evaluator. Your job is to rate how well an AI agent's response fulfills the given goal.\n\n"
-        f"GOAL:\n{goal.strip()}\n\n"
-        f"RESPONSE:\n{response.strip()}\n\n"
+        "You are an evaluator. Your job is to rate how well an AI agent's response fulfills the user request.\n\n"
+        f"SYSTEM PROMPT:\n{system_prompt.strip()}\n\n"
+        f"USER REQUEST:\n{user_input.strip()}\n\n"
+        f"AGENT RESPONSE:\n{response.strip()}\n\n"
         "Please answer ONLY with a single number from 1 (terrible) to 10 (perfect).\n"
-        "Do NOT add explanation. Do NOT repeat the goal or response. Respond only with the number."
+        "Do NOT add explanation. Do NOT repeat the input. Respond only with the number."
     )
 
     logger.debug("🧪 Evaluating effectiveness using prompt_evaluator...")
@@ -28,4 +29,4 @@ async def evaluate_effectiveness_score(response: str, goal: str) -> int:
         return score
     else:
         logger.warning(f"⚠️ Could not parse evaluation score from: {score_raw}")
-        return 1  # fallback mínimo
+        return 1

@@ -10,7 +10,7 @@ from projectmind.utils.prompt_optimizer import optimize_prompt_if_needed, improv
 from projectmind.utils.agent_evaluator import evaluate_effectiveness_score
 from projectmind.prompts.prompt_manager import PromptManager
 
-MAX_ATTEMPTS = 10
+MAX_ATTEMPTS = 1
 PASSING_SCORE = 4  # o ajusta a 8 si es del 1 al 10
 
 @asynccontextmanager
@@ -27,7 +27,7 @@ async def optimize_agent(agent_name: str, test_input: str):
         for attempt in range(1, MAX_ATTEMPTS + 1):
             logger.info(f"⚙️ Attempt {attempt}/{MAX_ATTEMPTS} for '{agent_name}'")
             try:
-                result = await run_agent_once(agent_name, test_input=test_input, return_full_info=True)
+                result = await run_agent_once(agent_name, input=test_input, return_full_info=True)
                 response = result.get("output")
                 prompt = result.get("prompt_used")
                 goal = result.get("goal")

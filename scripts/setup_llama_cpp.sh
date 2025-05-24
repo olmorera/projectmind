@@ -1,6 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
+ENV_PATH=$(poetry env info --path 2>/dev/null)
+
 LLAMA_DIR="/home/olmorera/AI/llama.cpp"
 LIB_PATH="$LLAMA_DIR/build/bin/libllama.so"
 
@@ -50,13 +52,39 @@ if [[ "$REPLY" =~ ^[Yy]$ ]]; then
   echo "✅ llama-cpp-python installed from local source."
 fi
 
-# Optionally persist LLAMA_CPP_LIB for Python
-if ! grep -q "LLAMA_CPP_LIB" ~/.bashrc; then
-  echo "📍 Exporting LLAMA_CPP_LIB to ~/.bashrc..."
+# Persist LLAMA_CPP_LIB in ~/.bashrc
+if grep -q "^export LLAMA_CPP_LIB=" ~/.bashrc; then
+  echo "🔁 Updating existing LLAMA_CPP_LIB in ~/.bashrc..."
+  sed -i "s|^export LLAMA_CPP_LIB=.*|export LLAMA_CPP_LIB=\"$LIB_PATH\"|" ~/.bashrc
+else
+  echo "📍 Adding LLAMA_CPP_LIB to ~/.bashrc..."
   echo "export LLAMA_CPP_LIB=\"$LIB_PATH\"" >> ~/.bashrc
-  echo "✅ Added LLAMA_CPP_LIB to ~/.bashrc (restart shell to apply)"
 fi
 
-echo "🎉 Done! llama.cpp is compiled and ready at: $LIB_PATH"
+if [[ -z "$ENV_PATH" ]]; then
+  echo ""
+  echo "⚠️  Poetry virtual environment not found."
+  echo "   Please run the following first to create it:"
+  echo ""
+  echo "   poetry install"
+  echo ""
+  echo "🔁 Then, re-run this script or manually do:"
+  echo "   source ~/.bashrc && source \$(poetry env info --path)/bin/activate"
+  echo "   poetry run pip install /home/olmorera/AI/llama.cpp --no-deps"
+  echo ""
+else
+  echo ""
+  echo "🔄 To apply the environment and use llama-cpp-python, run:"
+  echo ""
+  echo "   source ~/.bashrc && source \"$ENV_PATH/bin/activate\""
+  echo ""
+  echo "📦 Then run inside the project:"
+  echo ""
+  echo "   poetry run pip uninstall -y llama-cpp-python || true"
+  echo "   poetry run pip cache purge"
+  echo "   poetry run pip install /home/olmorera/AI/llama.cpp --no-deps"
+  echo ""
+fi
 
+echo "🎉 Done!"
 

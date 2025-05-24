@@ -2,6 +2,7 @@
 
 import os
 from llama_cpp import Llama
+from projectmind.models.chat_message import ChatMessage
 from projectmind.db.models.llm_model import LLMModel
 from projectmind.db.models.llm_config import LLMConfig
 from projectmind.llm.llama_loader import load_llama_cpp_library
@@ -55,10 +56,16 @@ class LlamaProvider:
             s.strip() for s in (config.stop_tokens or "").split(",") if s.strip()
         ] or []
 
-    def chat(self, messages: list[dict]) -> str:
+        for k, v in self.llm.metadata.items():
+            logger.debug(f"{k}: {v}")
+
+    def chat(self, messages: list[ChatMessage | dict]) -> str:
         logger.debug("🗨️ Generating response using structured chat format")
+
+        formatted_messages = [m.dict() if isinstance(m, ChatMessage) else ChatMessage(**m).dict() for m in messages]
+
         logger.debug({
-            "messages": messages,
+            "messages": formatted_messages,
             "chat_format": self.model.chat_format,
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
@@ -68,7 +75,7 @@ class LlamaProvider:
 
         try:
             response = self.llm.create_chat_completion(
-                messages=messages,
+                messages=formatted_messages,
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
                 top_p=self.top_p,

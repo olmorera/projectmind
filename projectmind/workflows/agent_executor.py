@@ -1,3 +1,5 @@
+# projectmind/workflows/agent_executor.py
+
 import uuid
 from typing import Dict, Any
 from sqlalchemy import select
@@ -8,12 +10,10 @@ from projectmind.db.models import AgentRun, Prompt, Agent
 from projectmind.utils.language_utils import translate_to_english
 from projectmind.utils.slack_notifier import notify_slack
 from projectmind.db.crud.project import get_project_by_name, create_project
-
 from projectmind.db.session_async import AsyncSessionLocal
 from projectmind.utils.context_handler import load_context, save_context
-from projectmind.utils.prompt_optimizer import maybe_optimize_prompt
 from projectmind.utils.task_handler import try_saving_tasks
-from projectmind.llm.prompt_formatter import format_prompt
+from projectmind.prompts.prompt_manager import PromptManager
 
 
 async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
@@ -71,13 +71,12 @@ async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
         # Load context
         context = await load_context(session, agent_row, agent, project, agent_name)
 
-        # ✅ Asignar prompt al agente y construir input final con contexto
+        # Set prompt and format input
         agent.definition.prompt = prompt_obj.prompt.strip()
-
         if context:
             input_text = f"{context.strip()}\n\n{input_text.strip()}"
 
-        # ✅ Ejecutar usando lógica centralizada en BaseAgent
+        # Run agent
         output = agent.run(input_text)
 
         # Save context and tasks
@@ -103,8 +102,14 @@ async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
         await session.commit()
         logger.success(f"✅ Agent run saved: {run.id}")
 
-        # Optimize prompt if needed
-        await maybe_optimize_prompt(session, agent_row, agent, prompt_obj, output)
+        # 🧠 Evaluar y mejorar prompt si es necesario
+        prompt_manager = PromptManager(session)
+        await prompt_manager.evaluate_and_optimize_if_needed(
+            agent_row,
+            system_prompt=prompt_obj.prompt.strip(),
+            user_input=user_input,
+            response=output
+        )
 
         return {
             **state,
