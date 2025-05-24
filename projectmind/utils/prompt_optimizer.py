@@ -2,38 +2,58 @@
 
 from loguru import logger
 from projectmind.prompts.prompt_manager import PromptManager
-from projectmind.agents.agent_factory import AgentFactory
-from projectmind.utils.slack_notifier import notify_slack
+from projectmind.utils.prompt_generator import improve_prompt
+from projectmind.utils.agent_evaluator import evaluate_effectiveness_score
 
 
-async def maybe_optimize_prompt(agent_row, run_result: dict, score: int):
-    logger.warning(f"⚠️ Low score ({score}) for agent '{agent_row.name}'. Optimizing prompt...")
+async def maybe_optimize_prompt(
+    agent_row,
+    prompt_manager: PromptManager,
+    system_prompt: str,
+    user_input: str,
+    response: str,
+):
+    try:
+        # Validación inicial del output del modelo
+        if not response or not isinstance(response, str) or not response.strip():
+            logger.warning(f"⚠️ Empty or invalid response for agent '{agent_row.name}', skipping optimization.")
+            return
 
-    optimizer = AgentFactory.create("prompt_optimizer")
-    optimization_prompt = (
-        f"You are a senior prompt engineer optimizing prompts for AI agents.\n\n"
-        f"--- Current Prompt ---\n{run_result['system_prompt']}\n\n"
-        f"--- Agent Info ---\nName: {agent_row.name}\n\n"
-        f"--- User Input ---\n{run_result['input']}\n\n"
-        f"--- Model Output ---\n{run_result['output']}\n\n"
-        f"--- Evaluation Score ---\n{score}\n\n"
-        f"Your task is to rewrite the system prompt to better guide the model.\n"
-        f"Return ONLY the improved prompt."
-    )
+        # Obtener score de efectividad
+        score = await evaluate_effectiveness_score(response, goal=agent_row.goal)
+        if score is None:
+            logger.warning(f"⚠️ Could not extract a valid score for agent '{agent_row.name}'")
+            return
 
-    improved_prompt = optimizer.run(optimization_prompt)
+        logger.info(f"📊 Effectiveness score for '{agent_row.name}': {score}")
+        await prompt_manager.update_effectiveness_score(agent_row.name, "default", score)
 
-    async with PromptManager.session_context() as session:
-        manager = PromptManager(session)
-        original_prompt = await manager.get_latest_prompt(agent_row.name, "default")
-        new_prompt = await manager.register_prompt_version(original_prompt, improved_prompt)
+        if score >= 8:
+            logger.info(f"✅ High effectiveness — no optimization needed for '{agent_row.name}'")
+            return
 
-        await notify_slack({
-            "agent": agent_row.name,
-            "prompt_id": str(original_prompt.id),
-            "version_old": original_prompt.version,
-            "version_new": new_prompt.version,
-            "model_used": agent_row.model_name,
-            "original": original_prompt.content,
-            "improved": improved_prompt
-        })
+        # Prompt base desde DB o fallback al proporcionado
+        old_prompt = await prompt_manager.get_latest_prompt(agent_row.name, "default")
+        base_prompt = old_prompt.prompt if old_prompt and old_prompt.prompt else system_prompt
+
+        if not base_prompt or not base_prompt.strip():
+            logger.warning(f"❌ No valid base prompt to improve for agent '{agent_row.name}'")
+            return
+
+        # Mejora del prompt
+        improved_prompt = await improve_prompt(base_prompt, user_input, response, score, agent_row.name)
+
+        if not improved_prompt or not improved_prompt.strip():
+            logger.warning(f"❌ Skipped saving: Improved prompt is invalid for agent '{agent_row.name}'")
+            return
+
+        if old_prompt and old_prompt.prompt.strip() == improved_prompt.strip():
+            logger.info(f"ℹ️ Skipped saving: Improved prompt is identical to current one for agent '{agent_row.name}'")
+            return
+
+        # Registrar nueva versión del prompt
+        await prompt_manager.register_prompt_version(old_prompt, improved_prompt)
+        logger.success(f"✨ Registered improved prompt for '{agent_row.name}' (score: {score})")
+
+    except Exception as e:
+        logger.error(f"❌ Failed to optimize prompt for '{agent_row.name}': {e}")

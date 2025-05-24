@@ -64,7 +64,7 @@ def upsert_prompts():
             if result:
                 # Update existing
                 result.version = data["version"]
-                result.prompt = data["prompt"]
+                result.prompt = data["system_prompt"]
                 result.is_active = data["is_active"]
             else:
                 # Insert new

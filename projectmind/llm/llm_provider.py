@@ -1,11 +1,10 @@
-# llama_provider.py
+# projectmind/llm/llm_provider.py
 
 import os
 from llama_cpp import Llama
 from loguru import logger
 from projectmind.db.models.llm_config import LLMConfig
 from projectmind.db.models.llm_model import LLMModel
-
 
 class LlamaProvider:
     def __init__(self, config: LLMConfig, model: LLMModel):
@@ -19,7 +18,6 @@ class LlamaProvider:
 
         logger.info(f"🧠 Initializing llama.cpp model: {model.name}")
 
-        # Extraer parámetros desde el modelo (con fallback)
         llama_args = {
             "model_path": model.model,
             "chat_format": model.chat_format or "llama-2",
@@ -45,7 +43,7 @@ class LlamaProvider:
         self.temperature = config.temperature or 0.7
         self.max_tokens = config.max_tokens or 1024
         self.top_p = config.top_p or 1.0
-        self.stop_tokens = self._parse_stop_tokens(config.stop_tokens)
+        self.stop_tokens = config.stop_tokens or []
 
     def generate(self, prompt: str) -> str:
         logger.debug("📝 Prompt enviado al modelo llama.cpp")
@@ -54,13 +52,8 @@ class LlamaProvider:
             max_tokens=self.max_tokens,
             temperature=self.temperature,
             top_p=self.top_p,
-            stop=self.stop_tokens
+            stop=self.stop_tokens or None
         )
         output = response["choices"][0]["text"].strip()
         logger.debug("✅ Respuesta recibida del modelo llama.cpp")
         return output
-
-    def _parse_stop_tokens(self, stop_tokens_raw: str):
-        if not stop_tokens_raw:
-            return None
-        return [s.strip() for s in stop_tokens_raw.split(",")]

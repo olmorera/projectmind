@@ -27,7 +27,7 @@ async def list_state():
         result = await session.execute(Prompt.__table__.select().where(Prompt.is_active == True).order_by(Prompt.agent_name, Prompt.version))
         prompts = result.fetchall()
         for prompt in prompts:
-            short_text = shorten(prompt.prompt, width=60, placeholder="...")
+            short_text = shorten(prompt.system_prompt, width=60, placeholder="...")
             print(f"  - {prompt.agent_name} (v{prompt.version}) → {short_text}")
 
         print("\n🧩 LLM Configurations:")

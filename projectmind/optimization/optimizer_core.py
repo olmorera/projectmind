@@ -45,7 +45,7 @@ async def optimize_agent_prompt_and_config(agent_row):
             logger.warning(f"⚠️ No active prompt for agent {agent.name}")
             return
 
-        prompt_text = prompt_obj.prompt
+        prompt_text = prompt_obj.system_prompt
 
         try:
             output = agent.run(prompt_text)
@@ -60,23 +60,25 @@ async def optimize_agent_prompt_and_config(agent_row):
         effectiveness = calculate_effectiveness(output)
 
         run = AgentRun(
-            id=uuid.uuid4(),
             agent_name=agent.name,
-            input="[prompt optimization]",
-            output=output,
-            llm_config_id=agent.llm.config.id,
+            task_type="prompt_optimization",
+            input_data="[prompt optimization]",
+            output_data=output,
+            is_successful=bool(output),
+            effectiveness_score=effectiveness,
+            prompt_version=prompt_obj.version,
+            model_used=agent.llm.model.name,
+            config_used={
+                "temperature": agent.llm.config.temperature,
+                "top_p": agent.llm.config.top_p,
+                "stop_tokens": agent.llm.config.stop_tokens,
+            },
             extra={
                 "prompt_id": str(prompt_obj.id),
-                "prompt_version": prompt_obj.version,
-                "effectiveness_score": effectiveness,
-                "config_used": {
-                    "temperature": agent.llm.config.temperature,
-                    "top_p": agent.llm.config.top_p,
-                    "stop_tokens": agent.llm.config.stop_tokens,
-                },
                 "config_was_override": False
             }
         )
+
         session.add(run)
 
         if is_output_weak(output) and agent_row.optimize_prompt:

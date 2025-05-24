@@ -1,7 +1,7 @@
 # projectmind/db/models/llm_config.py
 
-from sqlalchemy import Column, String, Float, Integer, DateTime, Text, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, String, Float, Integer, DateTime,  ForeignKey
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func
 import uuid
 from .base import Base
@@ -16,5 +16,5 @@ class LLMConfig(Base):
     temperature = Column(Float, default=0.7)
     max_tokens = Column(Integer, default=1024)
     top_p = Column(Float, default=1.0)
-    stop_tokens = Column(Text, nullable=True)
+    stop_tokens = Column(JSONB, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)

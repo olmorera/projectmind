@@ -1,7 +1,7 @@
 from llama_cpp import Llama
 
 llm = Llama(
-    model_path="/home/olmorera/AI/models/mixtral-8x7b-instruct-v0.1.Q4_K_M.gguf",
+    model_path="/home/olmorera/AI/models/Mixtral-8x7B-Instruct-v0.1.Q4_K_S.gguf",
     n_ctx=8192,
     n_threads=32,
     n_batch=64,
@@ -9,7 +9,7 @@ llm = Llama(
     use_mlock=False,
     numa=True,
     f16_kv=True,
-    rope_freq_base=500000,
+    rope_freq_base=1_000_000.0,
     chat_format="chatml",  # IMPORTANTE: Mixtral usa chatml
     verbose=True
 )

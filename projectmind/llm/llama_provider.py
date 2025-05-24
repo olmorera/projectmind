@@ -10,10 +10,8 @@ from loguru import logger
 
 load_llama_cpp_library()
 
-
 def _safe_bool(value: bool | None, default: bool = False) -> bool:
     return default if value is None else value
-
 
 class LlamaProvider:
     def __init__(self, config: LLMConfig, model: LLMModel):
@@ -22,7 +20,6 @@ class LlamaProvider:
 
         if model.provider != "llama":
             raise ValueError(f"❌ Invalid provider: {model.provider}")
-
         if not model.model or not os.path.isfile(model.model):
             raise FileNotFoundError(f"❌ Model file not found: {model.model}")
 
@@ -52,9 +49,7 @@ class LlamaProvider:
         self.temperature = config.temperature or 0.7
         self.max_tokens = config.max_tokens or 1024
         self.top_p = config.top_p or 1.0
-        self.stop_tokens = [
-            s.strip() for s in (config.stop_tokens or "").split(",") if s.strip()
-        ] or []
+        self.stop_tokens = config.stop_tokens or []
 
         for k, v in self.llm.metadata.items():
             logger.debug(f"{k}: {v}")

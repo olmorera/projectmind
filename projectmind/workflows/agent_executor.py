@@ -14,6 +14,7 @@ from projectmind.db.session_async import AsyncSessionLocal
 from projectmind.utils.context_handler import load_context, save_context
 from projectmind.utils.task_handler import try_saving_tasks
 from projectmind.prompts.prompt_manager import PromptManager
+from projectmind.utils.prompt_optimizer import maybe_optimize_prompt
 
 
 async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
@@ -72,7 +73,7 @@ async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
         context = await load_context(session, agent_row, agent, project, agent_name)
 
         # Set prompt and format input
-        agent.definition.prompt = prompt_obj.prompt.strip()
+        agent.definition.prompt = prompt_obj.system_prompt.strip()
         if context:
             input_text = f"{context.strip()}\n\n{input_text.strip()}"
 
@@ -85,31 +86,44 @@ async def agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
         # Register run
         run = AgentRun(
-            id=uuid.uuid4(),
             agent_name=agent_name,
-            user_id=slack_user,
-            input=user_input,
-            output=output,
+            task_type="default",
+            input_data=user_input,
+            output_data=output,
+            is_successful=bool(output),
+            effectiveness_score=None,
+            prompt_version=prompt_obj.version,
+            model_used=agent.llm.model.name,
+            config_used={
+                "temperature": agent.llm.config.temperature,
+                "top_p": agent.llm.config.top_p,
+                "stop_tokens": agent.llm.config.stop_tokens,
+            },
             extra={
                 "context_used": bool(context),
                 "project_name": project.name if project else None,
                 "was_translated": was_translated,
-                "translated_input": translated_input if was_translated else None
-            },
-            llm_config_id=agent.llm.config.id
+                "translated_input": translated_input if was_translated else None,
+                "slack_user": slack_user
+            }
         )
         session.add(run)
         await session.commit()
         logger.success(f"✅ Agent run saved: {run.id}")
 
         # 🧠 Evaluar y mejorar prompt si es necesario
-        prompt_manager = PromptManager(session)
-        await prompt_manager.evaluate_and_optimize_if_needed(
-            agent_row,
-            system_prompt=prompt_obj.prompt.strip(),
-            user_input=user_input,
-            response=output
-        )
+        try:
+            if agent_row.type != "evaluate":
+                prompt_manager = PromptManager(session)
+                await maybe_optimize_prompt(
+                    agent_row,
+                    prompt_manager,
+                    system_prompt=prompt_obj.system_prompt.strip(),
+                    user_input=user_input,
+                    response=output
+                )
+        except Exception as e:
+            logger.warning(f"⚠️ Prompt optimization failed for '{agent_name}': {e}")
 
         return {
             **state,

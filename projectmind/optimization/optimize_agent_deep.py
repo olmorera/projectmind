@@ -6,12 +6,12 @@ from contextlib import asynccontextmanager
 from projectmind.db.session_async import get_async_session
 from projectmind.db.models.agent import Agent
 from projectmind.utils.agent_runner import run_agent_once
-from projectmind.utils.prompt_optimizer import optimize_prompt_if_needed, improve_prompt
+from projectmind.utils.prompt_optimizer import improve_prompt
 from projectmind.utils.agent_evaluator import evaluate_effectiveness_score
 from projectmind.prompts.prompt_manager import PromptManager
 
 MAX_ATTEMPTS = 1
-PASSING_SCORE = 4  # o ajusta a 8 si es del 1 al 10
+PASSING_SCORE = 8  # 1–10 scale
 
 @asynccontextmanager
 async def session_context():
@@ -26,6 +26,7 @@ async def optimize_agent(agent_name: str, test_input: str):
 
         for attempt in range(1, MAX_ATTEMPTS + 1):
             logger.info(f"⚙️ Attempt {attempt}/{MAX_ATTEMPTS} for '{agent_name}'")
+
             try:
                 result = await run_agent_once(agent_name, input=test_input, return_full_info=True)
                 response = result.get("output")
@@ -39,24 +40,26 @@ async def optimize_agent(agent_name: str, test_input: str):
                 logger.debug(f"📤 Prompt used: {prompt}")
                 logger.debug(f"📥 Response received: {response}")
 
+                # 🧪 Evaluate score
                 score = await evaluate_effectiveness_score(response, goal=goal)
                 logger.info(f"📊 Effectiveness score: {score}")
 
-                # 🧠 Actualizamos el score en la tabla prompts
+                # 💾 Update effectiveness score in prompt table
                 await manager.update_effectiveness_score(agent_name, "default", score)
 
                 if score >= PASSING_SCORE:
                     logger.success(f"✅ High-quality prompt for '{agent_name}', stopping optimization.")
                     break
-                else:
-                    old_prompt = await manager.get_latest_prompt(agent_name, "default")
-                    improved = await improve_prompt(prompt)
-                    await manager.register_prompt_version(old_prompt, improved)
-                    logger.info(f"✨ Improved prompt registered for agent '{agent_name}'")
+
+                # ✨ Improve and version prompt
+                old_prompt = await manager.get_latest_prompt(agent_name, "default")
+                improved = await improve_prompt(prompt)
+                await manager.register_prompt_version(old_prompt, improved)
+                logger.info(f"🧠 Improved prompt registered for agent '{agent_name}'")
 
             except Exception as e:
-                logger.error(f"❌ Error optimizing '{agent_name}' on attempt {attempt}", exc_info=True)
-
+                logger.exception(f"🔥 Error optimizing '{agent_name}' on attempt {attempt}")
+                continue
 
 async def main():
     async with session_context() as session:

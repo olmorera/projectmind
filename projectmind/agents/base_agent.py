@@ -37,9 +37,16 @@ class BaseAgent:
         logger.debug(f"🧠 Agent '{self.name}' received input:\n{input}")
 
         try:
+            prompt_base = self.definition.prompt
+            if not prompt_base or not isinstance(prompt_base, str):
+                raise ValueError(f"❌ Invalid or missing prompt for agent '{self.name}'")
+
+            if not input or not isinstance(input, str):
+                raise ValueError(f"❌ Invalid user input for agent '{self.name}'")
+
             messages = format_prompt(
-                prompt_base=self.definition.prompt or "",
-                user_input=input,
+                prompt_base=prompt_base.strip(),
+                user_input=input.strip(),
                 chat_format=self.llm.model.chat_format or "llama-2"
             )
 
@@ -48,5 +55,9 @@ class BaseAgent:
             return response
 
         except Exception as e:
-            logger.error(f"❌ Error generating response: {e}")
+            logger.error(f"❌ Error generating response for agent '{self.name}': {e}")
             return f"⚠️ Failed to generate response: {str(e)}"
+
+    async def arun(self, input: str) -> str:
+        from asyncio import to_thread
+        return await to_thread(self.run, input)

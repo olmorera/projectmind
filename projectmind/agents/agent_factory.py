@@ -1,51 +1,22 @@
 # projectmind/agents/agent_factory.py
 
-from sqlalchemy.orm import Session
-from projectmind.db.session import engine
-from projectmind.db.models.agent import Agent as AgentModel
-from projectmind.db.models.llm_config import LLMConfig
-from projectmind.db.models.llm_model import LLMModel
-from projectmind.db.models.prompt import Prompt
+from projectmind.agents.base_agent import BaseAgent
 from projectmind.llm.llama_provider import LlamaProvider
-from projectmind.agents.base_agent import BaseAgent, AgentDefinition
-from loguru import logger
+from projectmind.db.session import get_session
 
-class AgentFactory:
-    @staticmethod
-    def create(agent_name: str) -> BaseAgent:
-        with Session(engine) as session:
-            logger.info(f"🧠 Loading agent '{agent_name}' dynamically from database")
+def create(agent_name: str) -> BaseAgent:
+    """
+    Crea y devuelve un agente basado en el nombre proporcionado.
+    """
+    # Crear una sesión para obtener los detalles del agente
+    session = get_session()
+    agent_row = session.query(BaseAgent).filter(BaseAgent.name == agent_name).first()
 
-            agent_row = session.query(AgentModel).filter_by(name=agent_name, is_active=True).first()
-            if not agent_row:
-                raise ValueError(f"Agent '{agent_name}' not found")
+    if not agent_row:
+        raise ValueError(f"Agent '{agent_name}' not found in database.")
 
-            config = session.query(LLMConfig).filter_by(id=agent_row.llm_config_id).first()
-            if not config:
-                raise ValueError(f"LLMConfig not found for agent '{agent_name}'")
+    # Aquí, según el nombre del agente, se carga el modelo respectivo.
+    model = LlamaProvider(agent_row.model_name)  # Asumiendo que 'model_name' está en la base de datos
 
-            model = session.query(LLMModel).filter_by(id=config.llm_model_id).first()
-            if not model:
-                raise ValueError(f"LLMModel not found for agent '{agent_name}'")
-
-            prompt_row = session.query(Prompt).filter_by(
-                agent_name=agent_name,
-                task_type="default",
-                is_active=True
-            ).order_by(Prompt.created_at.desc()).first()
-
-            if not prompt_row:
-                raise ValueError(f"No active prompt found for agent '{agent_name}'")
-
-            llm = LlamaProvider(config=config, model=model)
-
-            definition = AgentDefinition(
-                name=agent_row.name,
-                role=agent_row.type,
-                goal=agent_row.goal,
-                type=agent_row.type,
-                prompt=prompt_row.prompt,
-                test_input=agent_row.test_input
-            )
-
-            return BaseAgent(definition=definition, llm=llm)
+    # Asumimos que BaseAgent tiene la capacidad de aceptar un modelo de LlamaProvider
+    return BaseAgent(agent_row.name, model)
